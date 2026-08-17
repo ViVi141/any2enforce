@@ -76,7 +76,10 @@
 - 命名惯例：实例字段 `m_`，静态字段 `s_`，方法 PascalCase；静态常量 `static const`。
 - 命名参数语法：`method(paramName: value)`（如 `ToFloat(default: 17.6, offset: 3)`、`PrintFormat(..., level: LogLevel.DEBUG)`）。
 - `string` API：`Length/Contains/StartsWith/EndsWith/Substring/IndexOf/Trim/Split/Join/ToInt/ToFloat/ToLower/ToUpper/Get(i)`。
-- 集合：`.Count()`（array/map/set）、`.Insert()`、`.Remove()`、`.Find()`；map 另支持 `[]` 读写与 `.Set/.Get`。
+- 集合：`.Count()`（array/map/set）、`.Insert()`、`.Remove()`、`.Find()`、**`.Resize(n)`**；map 另支持 `[]` 读写与 `.Set/.Get`。
+- **`Math.E` 静态常量存在**（Math.Exp/Math.Tanh 不存在）→ exp 的标准做法是 `Math.Pow(Math.E, x)`（ANNA MLP 惯例，带 ±20 钳制）；tanh 用快速有理近似 `x / (1.0 + Math.AbsFloat(x))`。
+- **`notnull` / `out` 参数为生产惯例**（ANNA 72 处 notnull）。
+- 神经网络权重惯例（ANNA 生产代码）：扁平 `array<float>` + 索引算术（`W[r*cols+c]`）+ `{}` 字面量 + 惰性静态初始化（`if (s_Weights) return;`）；模型在 Python 中训练、以常量块导出（`// WEIGHTS_BEGIN/END` 标记）。
 - `NULL` 只见于引擎 proto 签名默认值；业务代码一律小写 `null`。
 - 模块级可执行代码不存在 —— Reforger 全靠类/组件/实体驱动（印证 v0.1"只输出函数与类"的取舍）。
 
