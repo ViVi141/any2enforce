@@ -2,28 +2,28 @@
 // 逐个取消注释一个"候选"，单独编译一次，记录哪个能通过。
 // 注意：本文件属于"探测包"，每次只测一个候选。
 
-class P02_Base
+class P02_SuperCtorSyntaxBase
 {
 	int m_value;
 
-	void P02_Base(int value)
+	void P02_SuperCtorSyntaxBase(int value)
 	{
 		m_value = value;
 	}
 }
 
-class P02_Derived : P02_Base
+class P02_SuperCtorSyntax : P02_SuperCtorSyntaxBase
 {
-	void P02_Derived()
+	void P02_SuperCtorSyntax()
 	{
 		// 候选 A：super() 空调用
 		//super();
 
 		// 候选 B：super.基类名(参数)
-		//super.P02_Base(5);
+		//super.P02_SuperCtorSyntaxBase(5);
 
 		// 候选 C：直接用基类名调用
-		//P02_Base(5);
+		//P02_SuperCtorSyntaxBase(5);
 
 		PrintFormat("[P02] m_value = %1", m_value);
 	}

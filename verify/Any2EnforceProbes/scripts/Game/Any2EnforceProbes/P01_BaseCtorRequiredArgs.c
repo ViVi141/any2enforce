@@ -5,19 +5,19 @@
 // 注意：本文件属于"探测包"，预期可能失败，请单独复制，勿与
 // Any2EnforceVerify 包混在一起编译。
 
-class P01_Base
+class P01_BaseCtorRequiredArgsBase
 {
 	int m_value;
 
-	void P01_Base(int value)
+	void P01_BaseCtorRequiredArgsBase(int value)
 	{
 		m_value = value;
 	}
 }
 
-class P01_Derived : P01_Base
+class P01_BaseCtorRequiredArgs : P01_BaseCtorRequiredArgsBase
 {
-	void P01_Derived()
+	void P01_BaseCtorRequiredArgs()
 	{
 		PrintFormat("[P01] m_value = %1", m_value);
 	}
