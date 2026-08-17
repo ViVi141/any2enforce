@@ -39,6 +39,7 @@ class EnforceBackend:
         self.naming = config.get("naming", {})
         self.policy = self.naming.get("policy", "keep")
         self.field_prefix = self.naming.get("field_prefix", "m_")
+        self.prefix = self.naming.get("prefix", "")
         self.visibility = config.get("visibility", "protected")
         self.lines: List[str] = []
         self.indent = 0
@@ -85,7 +86,7 @@ class EnforceBackend:
         ret = self._type(fn.return_type or VOID)
         if fn.doc:
             self._emit_doc_comment(fn.doc)
-        self._line(f"{ret} {self._fn_id(fn.name)}({self._params(fn.params)})")
+        self._line(f"{ret} {self._global_fn_id(fn.name)}({self._params(fn.params)})")
         self._emit_todos(fn.todos)
         self._emit_body(fn.body, predeclare={p.name for p in fn.params})
 
@@ -589,7 +590,7 @@ class EnforceBackend:
                     e.span,
                 )
                 return "0"
-            return f"{self._fn_id(name)}({', '.join(args)})"
+            return f"{self._global_fn_id(name)}({', '.join(args)})"
         if isinstance(e.func, AttributeExpr):
             if _is_super_expr(e.func.value):
                 # super().method(...) -> super.Method(...) (verified: 1357 files)
@@ -772,6 +773,12 @@ class EnforceBackend:
     def _fn_id(self, name: str) -> str:
         out = _to_pascal(name) if self.policy == "camel" else name
         return self._check(out)
+
+    def _global_fn_id(self, name: str) -> str:
+        """Global (module-level) function name: prefix + policy-adjusted name.
+        EnforceScript compiles all scripts into one flat namespace, so module
+        functions need a project-wide unique prefix (ANNA uses ANNA_)."""
+        return self._check(self.prefix + self._fn_id(name))
 
     def _method_id(self, name: str) -> str:
         return self._fn_id(name)

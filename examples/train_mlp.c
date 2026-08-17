@@ -8,7 +8,7 @@
 // （float 取模，Python 与 EnforceScript 的 IEEE 结果一致）。
 // 运行：转换后用 execCode run_training()，应打印 30 轮单调下降的 loss。
 // 验证：本文件在 Python 里先跑通（loss 下降），再转成 EnforceScript 对拍。
-float relu(float x)
+float train_relu(float x)
 {
     if (x > 0.0)
     {
@@ -20,7 +20,7 @@ float relu(float x)
     }
 }
 
-float relu_deriv(float x)
+float train_relu_deriv(float x)
 {
     if (x > 0.0)
     {
@@ -32,7 +32,7 @@ float relu_deriv(float x)
     }
 }
 
-float approx_exp(float x)
+float train_approx_exp(float x)
 {
     if (x < -20.0)
     {
@@ -45,7 +45,7 @@ float approx_exp(float x)
     return Math.Pow(2.718281828459045, x);
 }
 
-array<float> softmax(array<float> logits)
+array<float> train_softmax(array<float> logits)
 {
     auto count = logits.Count();
     auto max_logit = logits[0];
@@ -60,7 +60,7 @@ array<float> softmax(array<float> logits)
     auto total = 0.0;
     for (int idx = 0; idx < count; idx++)
     {
-        auto value = approx_exp(logits[idx] - max_logit);
+        auto value = train_approx_exp(logits[idx] - max_logit);
         probs.Insert(value);
         total = total + value;
     }
@@ -119,7 +119,7 @@ float train_epoch(array<float> xs, array<float> ys, array<float> w1, array<float
                 z = z + (w1[wbase + fi] * x_norm[fi]);
             }
             z1.Insert(z);
-            h1.Insert(relu(z));
+            h1.Insert(train_relu(z));
         }
         array<float> z2 = {  };
         for (int ci = 0; ci < class_count; ci++)
@@ -132,7 +132,7 @@ float train_epoch(array<float> xs, array<float> ys, array<float> w1, array<float
             }
             z2.Insert(z);
         }
-        auto probs = softmax(z2);
+        auto probs = train_softmax(z2);
         array<float> err = {  };
         for (int ci = 0; ci < class_count; ci++)
         {
@@ -161,7 +161,7 @@ float train_epoch(array<float> xs, array<float> ys, array<float> w1, array<float
         }
         for (int hi = 0; hi < hidden_size; hi++)
         {
-            auto g = dh[hi] * relu_deriv(z1[hi]);
+            auto g = dh[hi] * train_relu_deriv(z1[hi]);
             b1[hi] = b1[hi] - (lr * g);
             auto wbase = hi * feature_count;
             for (int fi = 0; fi < feature_count; fi++)

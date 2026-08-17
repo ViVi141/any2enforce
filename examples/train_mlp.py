@@ -5,18 +5,23 @@
 （float 取模，Python 与 EnforceScript 的 IEEE 结果一致）。
 运行：转换后用 execCode run_training()，应打印 30 轮单调下降的 loss。
 验证：本文件在 Python 里先跑通（loss 下降），再转成 EnforceScript 对拍。
+
+⚠ 命名空间教训：EnforceScript 无模块，全部脚本一起编译 —— 全局函数名
+必须全项目唯一（与 mlp_forward.c 的 relu/softmax 撞名会报
+"Multiple declaration of function"）。故辅助函数统一加 train_ 前缀；
+工具侧可用 --prefix 选项统一加前缀。
 """
 
 
-def relu(x: float) -> float:
+def train_relu(x: float) -> float:
     return x if x > 0.0 else 0.0
 
 
-def relu_deriv(x: float) -> float:
+def train_relu_deriv(x: float) -> float:
     return 1.0 if x > 0.0 else 0.0
 
 
-def approx_exp(x: float) -> float:
+def train_approx_exp(x: float) -> float:
     # ANNA 惯例：Math.Pow(Math.E, x) + 钳制（引擎无 Math.Exp）
     if x < -20.0:
         return 0.0
@@ -25,7 +30,7 @@ def approx_exp(x: float) -> float:
     return 2.718281828459045 ** x
 
 
-def softmax(logits: list[float]) -> list[float]:
+def train_softmax(logits: list[float]) -> list[float]:
     count = len(logits)
     max_logit = logits[0]
     for idx in range(1, count):
@@ -34,7 +39,7 @@ def softmax(logits: list[float]) -> list[float]:
     probs: list[float] = []
     total = 0.0
     for idx in range(count):
-        value = approx_exp(logits[idx] - max_logit)
+        value = train_approx_exp(logits[idx] - max_logit)
         probs.append(value)
         total = total + value
     for idx in range(count):
@@ -78,7 +83,7 @@ def train_epoch(xs: list[float], ys: list[float], w1: list[float], b1: list[floa
             for fi in range(feature_count):
                 z = z + w1[wbase + fi] * x_norm[fi]
             z1.append(z)
-            h1.append(relu(z))
+            h1.append(train_relu(z))
         z2: list[float] = []
         for ci in range(class_count):
             z = b2[ci]
@@ -86,7 +91,7 @@ def train_epoch(xs: list[float], ys: list[float], w1: list[float], b1: list[floa
             for hi in range(hidden_size):
                 z = z + w2[wbase + hi] * h1[hi]
             z2.append(z)
-        probs = softmax(z2)
+        probs = train_softmax(z2)
 
         # ---- error (MSE 梯度) 与 loss ----
         err: list[float] = []
@@ -112,7 +117,7 @@ def train_epoch(xs: list[float], ys: list[float], w1: list[float], b1: list[floa
 
         # ---- SGD 更新 w1 / b1 ----
         for hi in range(hidden_size):
-            g = dh[hi] * relu_deriv(z1[hi])
+            g = dh[hi] * train_relu_deriv(z1[hi])
             b1[hi] = b1[hi] - lr * g
             wbase = hi * feature_count
             for fi in range(feature_count):

@@ -209,3 +209,22 @@ def test_in_game_trainer_transpiles():
     assert "w1.Insert(" in text         # append -> Insert
     assert "PrintFormat(\"%1 %2\", epoch, loss);" in text
     assert text.count("auto z = ") == 2  # block-scoped per loop
+
+
+def test_global_function_prefix():
+    """EnforceScript has one flat namespace: --prefix applies to global
+    functions (declaration and calls) but not methods or locals."""
+    src = ("def helper(x: int) -> int:\n"
+           "    return x + 1\n"
+           "def caller(a: int) -> int:\n"
+           "    return helper(a)\n"
+           "class C:\n"
+           "    def method(self, x: int) -> int:\n"
+           "        return helper(x)\n")
+    _, text, _ = transpile(src, "t.py", config={"naming": {"prefix": "M_"}})
+    assert "int M_helper(int x)" in text
+    assert "int M_caller(int a)" in text
+    assert "return M_helper(a);" in text
+    assert "M_helper(x);" in text          # call inside method also prefixed
+    assert "int method(int x)" in text      # methods NOT prefixed
+    assert "M_method" not in text

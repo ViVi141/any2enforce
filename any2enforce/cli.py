@@ -33,6 +33,10 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="identifier naming policy")
     ap.add_argument("--field-prefix", default=None,
                     help="field prefix for hoisted instance attributes (default m_)")
+    ap.add_argument("--prefix", default=None,
+                    help="prefix for global functions (EnforceScript has one "
+                         "flat namespace; avoids cross-file name collisions, "
+                         "e.g. --prefix ANNA_)")
     ap.add_argument("--visibility", default=None,
                     choices=["public", "protected", "private"])
     ap.add_argument("--validate", action="store_true",
@@ -54,6 +58,8 @@ def _config_from_args(args) -> dict:
         cfg["naming"] = {"policy": args.naming}
     if args.field_prefix is not None:
         cfg.setdefault("naming", {})["field_prefix"] = args.field_prefix
+    if args.prefix is not None:
+        cfg.setdefault("naming", {})["prefix"] = args.prefix
     if args.visibility:
         cfg["visibility"] = args.visibility
     if args.workbench_url or args.addon_path:

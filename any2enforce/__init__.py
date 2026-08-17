@@ -15,7 +15,10 @@ from .sema.analyze import Analyzer
 __version__ = "0.1.0"
 
 DEFAULT_CONFIG: dict = {
-    "naming": {"policy": "keep", "field_prefix": "m_"},
+    # prefix: applied to global functions only (EnforceScript has one flat
+    # namespace — all scripts compile together, so module-level function names
+    # must be unique project-wide; ANNA uses an ANNA_ prefix)
+    "naming": {"policy": "keep", "field_prefix": "m_", "prefix": ""},
     "types": {"untyped_param_fallback": "float"},
     "visibility": "protected",
     "validate": {
