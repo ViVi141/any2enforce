@@ -45,18 +45,22 @@
 | `PrintError`/`PrintWarning` 全局 | 0 文件（仅有自定义方法） | 不映射 |
 | 数组 `new array<T> { ... }` | 0 文件；惯用 `array<T> x = { ... };` | 改用 `{}` 初始化式 |
 
-## 待确认（⚠）— 保守假设 + Workbench 校验项
+## 全部语法项已定案 ✅（2024-06 实测收官）
 
-| # | 构造 | 状态与实测 |
+| # | 构造 | 定案结论 |
 |---|---|---|
-| 6 | int/int 除法结果类型 | ✅ `/` 是 float 除法（`7 / 2 == 3.5`）；**`int i = 7 / 2` 可编译**（P06 无报错，隐式转换合法；值为 3 还是 4 待运行确认）；`//` → `Math.Floor(a / b)` 语义正确（含负数 floor 语义） |
-| 13b | 显式基类构造调用 | ✅ **无显式语法，参数隐式转发**：基类默认构造 → 隐式调用（C01=42）；基类构造带必选参数 → 派生构造必须声明同名参数（P01/P02 报 `Overloaded function not compatible`；语料 `SCR_WorldTimerEntry(string name, World world) : SCR_TimerEntryBase(string name)`）；派生不写构造也可编译（`SCR_RealTimerEntry` 先例）。工具已实现 `ctor-forward` 检查 + `super().__init__` 丢弃 + `super().method`→`super.Method` |
-| 14 | 属性惯用法 | ☐ 引擎无 property，`@property` v0.1 报错，v0.2 生成 `GetX/SetX` |
-| 15 | 运算符重载 | ✅ **不支持**：`operator+` 语法非法（`Expected '(' not a '+'`）；`opAdd`/`opEquals` 仅作为普通方法名编译（引擎是否接线到 `+` 无证据，语料 0 用法）→ 按不支持处理 |
-| 16 | 回调/函数指针 | ✅ **ScriptInvoker 可用**（Insert + Invoke，C05=true）；`ScriptCaller` 不存在 |
-| 21 | 字符串转义 | ✅ `\t`/`\n`/`\u0041`/`\x41`/`\0` **全部合法**（P08 无报错） |
-| 22b | char 类型 | ✅ **不存在**（P04：声明与参数均报 `Unknown type 'char'`）；字符串 `s[0]` 下标可编译（返回 string） |
-| 24 | 浮点科学计数字面量 | ✅ **小写 `e` 全合法**（`1e+30`/`1.0e30`/`1e30`）；**大写 `E` 非法**（`1E30`、`1.0E30`）；repr 输出（恒小写 e）安全 |
+| 6 | int/int 除法 | `/` 是 float 除法（`7/2 == 3.5`）；`int i = 7/2` 合法且**向零截断**（=3）；`//` → `Math.Floor(a/b)` 对负数也是正确 floor 语义（`Math.Floor(-3.5) = -4` = Python `-7//2`） |
+| 7 | float 取模 | **float 直接 `%` 非法**（`Unknown operator '%'`）→ 必须 `Math.Mod`（`Math.Mod(5.5,2.0) == 1.5`）；int 用 `%` |
+| 13b | 基类构造 | 无显式语法，**参数按名隐式转发**：默认构造隐式调用（C01=42）；必选参数基类 → 派生构造须声明同名参数（P01/P02）；不写构造也可编译（`SCR_RealTimerEntry` 先例） |
+| 14 | 属性惯用法 | 引擎无 property → `@property` v0.1 报错，v0.2 生成 `GetX/SetX`（设计决策，非语法未知） |
+| 15 | 运算符重载 | **不支持**：`operator+` 非法；`opAdd`/`opEquals` 仅普通方法名（语料 0 用法） |
+| 16 | 回调/函数指针 | **ScriptInvoker**（Insert + Invoke，C05=true）；`ScriptCaller` 不存在 |
+| 21 | 字符串转义 | `\t`/`\n`/`\u0041`/`\x41`/`\0` 全部合法（P08） |
+| 22b | char 类型 | **不存在**（`Unknown type 'char'`）；`s[0]` 可编译返回 string |
+| 24 | 浮点字面量 | 小写 `e` 全合法（`1e+30`/`1.0e30`/`1e30`）；大写 `E` 非法（`1E30`/`1.0E30`）；repr 输出安全 |
+| 2b | 成员测试 | `array.Contains`（V06）、**`map.Contains`（P09）**、`string.Contains` 全部可用 → `x in c` → `c.Contains(x)` |
+| 4b | 内联数组实参 | `{...}` 可直接作实参（V05=6） |
+| 12 | 构造函数 | `void ClassName(...)` + `= 默认值` 正常 |
 
 ## 运行时已定案（Any2EnforceVerify 实测，2024-06）
 

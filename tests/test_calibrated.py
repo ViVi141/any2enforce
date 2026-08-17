@@ -86,6 +86,14 @@ def test_not_in_lowered_to_negated_contains():
     assert "return !values.Contains(probe);" in text
 
 
+def test_map_membership_uses_contains():
+    src = ("def f(m: dict[str, int], key: str) -> bool:\n"
+           "    return key in m\n")
+    _, text, diag = transpile(src, "t.py")
+    assert diag.errors == []
+    assert "return m.Contains(key);" in text
+
+
 def test_inline_array_literal_as_call_argument():
     src = ("def total(xs: list[int]) -> int:\n"
            "    return xs[0]\n"

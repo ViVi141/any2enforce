@@ -146,7 +146,7 @@ EnforceScript 是 Bohemia Interactive 在 Arma Reforger（Enfusion 引擎）中�
 | `c if t else f` | **if/else 展开** | ❌ EnforceScript 无三元运算符（实测）；赋值/return 场景自动展开，表达式内嵌报错 |
 | `x[i]` | `x[i]` | array/map/string 均实测支持 `[]` 读写 |
 | `len(x)` | `x.Count()`（array/set/map）或 `x.Length()`（string） | 实测 `.Count()`（832 文件）、`.Length()`（string.c） |
-| `x in lst` | ✗ v0.1 | `Contains/Find` 映射 v0.2 |
+| `x in lst` | `c.Contains(x)` | 实测 array/map/string 均支持 `.Contains()`（V06/P09） |
 | `f"a={x} b={y}"` | `string.Format("a=%1 b=%2", x, y)` | 实测 `%1..%9` 占位符 |
 | `str(x)` | `x.ToString()`（int/float）/`string.ToString(x)` | 实测两者均存在 |
 | `int(x)` / `float(x)` | `(int)(x)` / `(float)(x)` | 实测 C 风格强转合法 |

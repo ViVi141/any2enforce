@@ -411,17 +411,11 @@ class EnforceBackend:
                         )
                         parts.append(f"{self._p(left)} != {r}")
                 elif op in ("in", "not in"):
-                    # verified: array.Contains / string.Contains (runtime V06)
+                    # verified: array.Contains (V06), map.Contains (P09),
+                    # string.Contains (string.c API) — all compile & run
                     container = right
                     t = self._expr_type(container)
-                    if isinstance(t, MapType):
-                        self.diag.error(
-                            "in-map",
-                            "`x in map` is not mapped yet (map.Contains pending "
-                            "verification P09); use `k in m` only after confirm",
-                            e.span,
-                        )
-                    elif t is None:
+                    if t is None:
                         self.diag.warning(
                             "in-type",
                             "membership test on unknown type; emitted as "
