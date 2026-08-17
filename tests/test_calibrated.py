@@ -153,3 +153,45 @@ def test_ctor_forward_ok_when_params_declared():
     _, text, diag = transpile(src, "t.py")
     assert diag.errors == []
     assert "void Derived(string name)" in text
+
+
+def test_list_append_maps_to_insert():
+    src = ("def f() -> None:\n"
+           "    xs: list[int] = []\n"
+           "    xs.append(1)\n"
+           "    xs.append(2)\n")
+    _, text, diag = transpile(src, "t.py")
+    assert diag.errors == []
+    assert "array<int> xs = {  };" in text
+    assert "xs.Insert(1);" in text
+    assert "xs.Insert(2);" in text
+
+
+def test_block_scoped_redeclaration():
+    """Python is function-scoped, EnforceScript is block-scoped: a variable
+    assigned inside two sibling loops must be declared with `auto` in each
+    (matches ANNA's per-loop `float z = ...` idiom)."""
+    src = ("def f(a: list[float], b: list[float], n: int) -> float:\n"
+           "    for i in range(n):\n"
+           "        z = a[i]\n"
+           "        z = z + 1.0\n"
+           "    for i in range(n):\n"
+           "        z = b[i]\n"
+           "        z = z + 2.0\n"
+           "    return z\n")
+    _, text, diag = transpile(src, "t.py")
+    assert diag.errors == []
+    assert text.count("auto z = ") == 2, text
+
+
+def test_mlp_forward_round_trip():
+    """The ANNA-style MLP forward pass must transpile cleanly and keep the
+    engine idioms: Math.Pow for exp, Insert for append, per-loop z."""
+    mlp = HERE.parent / "examples" / "mlp_forward.py"
+    source = mlp.read_text(encoding="utf-8")
+    _, text, diag = transpile(source, filename=str(mlp))
+    assert diag.errors == [], "\n".join(d.render_text() for d in diag.errors)
+    assert "Math.Pow(2.718281828459045, x)" in text
+    assert "probs.Insert(value);" in text
+    assert text.count("auto z = ") == 2
+    assert "array<float> w1 = {" in text

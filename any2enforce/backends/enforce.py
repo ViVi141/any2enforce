@@ -45,7 +45,7 @@ class EnforceBackend:
         self._field_names: set = set()
         self._method_names: set = set()
         self._locals: Dict[str, Type] = {}
-        self._declared: set = set()  # names already declared in current function
+        self._scopes: List[set] = []  # EnforceScript uses block scoping (unlike Python)
 
     # ==================================================================
     # entry
@@ -82,13 +82,12 @@ class EnforceBackend:
     # ==================================================================
     def _emit_function(self, fn: FunctionDef) -> None:
         self._locals = getattr(fn, "locals", None) or {}
-        self._declared = set()
         ret = self._type(fn.return_type or VOID)
         if fn.doc:
             self._emit_doc_comment(fn.doc)
         self._line(f"{ret} {self._fn_id(fn.name)}({self._params(fn.params)})")
         self._emit_todos(fn.todos)
-        self._emit_body(fn.body)
+        self._emit_body(fn.body, predeclare={p.name for p in fn.params})
 
     def _emit_class(self, cls: ClassDef) -> None:
         self._field_names = {f.name for f in cls.fields}
@@ -121,7 +120,6 @@ class EnforceBackend:
 
     def _emit_method(self, cls: ClassDef, m: MethodDef) -> None:
         self._locals = getattr(m, "locals", None) or {}
-        self._declared = {p.name for p in m.params}
         if m.is_constructor:
             name = self._type_id(cls.name)
             ret = "void"
@@ -133,7 +131,7 @@ class EnforceBackend:
         static = "static " if m.is_static and not m.is_constructor else ""
         self._line(f"{static}{ret} {name}({self._params(m.params)})")
         self._emit_todos(m.todos)
-        self._emit_body(m.body)
+        self._emit_body(m.body, predeclare={p.name for p in m.params})
 
     def _params(self, params) -> str:
         out = []
@@ -147,8 +145,9 @@ class EnforceBackend:
     # ==================================================================
     # statements
     # ==================================================================
-    def _emit_body(self, body: List[Stmt]) -> None:
+    def _emit_body(self, body: List[Stmt], predeclare=()) -> None:
         self._line("{")
+        self._scopes.append(set(predeclare))
         self.indent += 1
         if not body:
             self._line("// (empty body from Python 'pass' / docstring)")
@@ -156,6 +155,19 @@ class EnforceBackend:
             self._stmt(stmt)
         self.indent -= 1
         self._line("}")
+        self._scopes.pop()
+
+    # ------------------------------------------------------------------
+    # scope helpers (EnforceScript = block scoping; Python = function scoping)
+    # ------------------------------------------------------------------
+    def _in_scope(self, name: str) -> bool:
+        return any(name in s for s in self._scopes)
+
+    def _declare(self, name: str) -> None:
+        if self._scopes:
+            self._scopes[-1].add(name)
+        else:
+            self._scopes.append({name})
 
     def _stmt(self, stmt: Stmt) -> None:
         if isinstance(stmt, AssignStmt):
@@ -163,9 +175,15 @@ class EnforceBackend:
         elif isinstance(stmt, AnnAssignStmt):
             if isinstance(stmt.target, NameExpr):
                 t = stmt.type or AUTO
-                self._declared.add(stmt.target.name)
-                self._line(f"{self._type(t)} {self._var_id(stmt.target.name)}"
-                           f"{' = ' + self._expr(stmt.value) if stmt.value else ''};")
+                self._declare(stmt.target.name)
+                if isinstance(stmt.value, ListExpr):
+                    # xs: list[T] = [...] -> `array<T> xs = { ... };`
+                    items = ", ".join(self._expr(i) for i in stmt.value.items)
+                    self._line(f"{self._type(t)} {self._var_id(stmt.target.name)}"
+                               f" = {{ {items} }};")
+                else:
+                    self._line(f"{self._type(t)} {self._var_id(stmt.target.name)}"
+                               f"{' = ' + self._expr(stmt.value) if stmt.value else ''};")
             else:
                 self._line(f"{self._expr(stmt.target)} = {self._expr(stmt.value)};"
                            if stmt.value else f"{self._expr(stmt.target)} = 0;")
@@ -221,10 +239,10 @@ class EnforceBackend:
         target = self._expr(stmt.target)
         value = self._expr(stmt.value)
         if isinstance(stmt.target, NameExpr):
-            if stmt.target.name in self._declared:
+            if self._in_scope(stmt.target.name):
                 self._line(f"{target} = {value};")
             else:
-                self._declared.add(stmt.target.name)
+                self._declare(stmt.target.name)
                 self._line(f"auto {target} = {value};")
         else:
             self._line(f"{target} = {value};")
@@ -245,10 +263,10 @@ class EnforceBackend:
                     stmt.value.span,
                 )
                 t = ArrayType(FLOAT)
-            if stmt.target.name in self._declared:
+            if self._in_scope(stmt.target.name):
                 self._line(f"{name} = {lit};")
             else:
-                self._declared.add(stmt.target.name)
+                self._declare(stmt.target.name)
                 self._line(f"{self._type(t)} {name} = {lit};")
         else:
             self._line(f"{self._expr(stmt.target)} = {lit};")
@@ -267,10 +285,10 @@ class EnforceBackend:
             kt, vt = kt or FLOAT, vt or FLOAT
         name = self._var_id(target.name)
         decl = f"map<{kt.render()}, {vt.render()}> {name} = new map<{kt.render()}, {vt.render()}>();"
-        if target.name in self._declared:
+        if self._in_scope(target.name):
             self._line(f"{name} = new map<{kt.render()}, {vt.render()}>();")
         else:
-            self._declared.add(target.name)
+            self._declare(target.name)
             self._line(decl)
         for k, v in d.items:
             self._line(f"{name}[{self._expr(k)}] = {self._expr(v)};")
@@ -279,8 +297,8 @@ class EnforceBackend:
         """`x = a if c else b` -> `T x = b; if (c) { x = a; }`
         (EnforceScript has NO ternary operator - verified)"""
         t = stmt.value
-        if isinstance(stmt.target, NameExpr) and stmt.target.name not in self._declared:
-            self._declared.add(stmt.target.name)
+        if isinstance(stmt.target, NameExpr) and not self._in_scope(stmt.target.name):
+            self._declare(stmt.target.name)
             self._line(f"auto {self._var_id(stmt.target.name)} = {self._expr(t.if_false)};")
         else:
             self._line(f"{self._expr(stmt.target)} = {self._expr(t.if_false)};")
@@ -354,8 +372,8 @@ class EnforceBackend:
             cond = f"{var} < {self._expr(hi)}"
             inc = f"{var}++"
         self._line(f"for (int {var} = {self._expr(lo)}; {cond}; {inc})")
-        self._declared.add(stmt.target.name)
-        self._emit_body(stmt.body)
+        # loop var is block-scoped in EnforceScript: visible in the body only
+        self._emit_body(stmt.body, predeclare={stmt.target.name})
 
     def _foreach(self, stmt: ForStmt) -> None:
         t = stmt.elem_type
@@ -369,8 +387,7 @@ class EnforceBackend:
             render = self._type(t)
         self._line(f"foreach ({render} {self._var_id(stmt.target.name)} : "
                    f"{self._expr(stmt.iterable)})")
-        self._declared.add(stmt.target.name)
-        self._emit_body(stmt.body)
+        self._emit_body(stmt.body, predeclare={stmt.target.name})
 
     # ==================================================================
     # expressions
@@ -580,6 +597,11 @@ class EnforceBackend:
             if isinstance(e.func.value, NameExpr) and e.func.value.name == "this":
                 # self.method(...) -> bare method call (verified convention)
                 return f"{self._method_id(e.func.attr)}({', '.join(args)})"
+            if e.func.attr == "append":
+                # list.append(x) -> arr.Insert(x) (verified: ANNA MLP uses
+                # Insert; array has no append)
+                obj = self._expr(e.func.value)
+                return f"{obj}.Insert({', '.join(args)})"
             obj = self._expr(e.func.value)
             meth = self._method_id(e.func.attr)
             return f"{obj}.{meth}({', '.join(args)})"
