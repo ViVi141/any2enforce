@@ -8,17 +8,35 @@
 //      a) 游戏内控制台（~）：execCode TestMLP.Run()
 //      b) 复用 RunOnGameStart.c：在 override void OnGameStart() 里加一行 TestMLP.Run();
 //      c) 直接在 execCode 里试表达式（内联数组实参已验证合法）：
-//         predict_behavior({ 0.1, -0.05, 0.4, 0.2 })
+//         predict_behavior({ 1.0, 1.0, 1.0, 1.0 })
 //
 // 说明：predict_behavior 是全局函数，EnforceScript 无命名空间，任何类都能直接调用；
-//       特征向量维度/含义取决于模型（演示版为 4 维占位值，换成你的真实特征即可）。
+//       特征向量维度/含义取决于模型（演示版为 4 维）。
 // ============================================================
 class TestMLP
 {
 	static void Run()
 	{
-		array<float> feat = { 0.1, -0.05, 0.4, 0.2 };
+		// 批量数值对拍：与 Python 参考实现的期望值对比
+		//   [ 1, 1, 1, 1]  -> 0     [-1, 1, 0, 0]  -> 1     [ 0, 0,-1, 1] -> 2
+		//   [-1,-1,-1,-1]  -> 1     [ 1,-1, 1,-1]  -> 0     [ 0.5,-0.5,0,0]-> 0
+		//   [ 0.1,-0.05,0.4,0.2] -> 0     [ 0.9,-0.8,0.7,0.3] -> 0
+		CheckVector("T1", { 1.0, 1.0, 1.0, 1.0 }, 0);
+		CheckVector("T2", { -1.0, 1.0, 0.0, 0.0 }, 1);
+		CheckVector("T3", { 0.0, 0.0, -1.0, 1.0 }, 2);
+		CheckVector("T4", { -1.0, -1.0, -1.0, -1.0 }, 1);
+		CheckVector("T5", { 1.0, -1.0, 1.0, -1.0 }, 0);
+		CheckVector("T6", { 0.5, -0.5, 0.0, 0.0 }, 0);
+		CheckVector("T7", { 0.1, -0.05, 0.4, 0.2 }, 0);
+		CheckVector("T8", { 0.9, -0.8, 0.7, 0.3 }, 0);
+	}
+
+	static void CheckVector(string tag, array<float> feat, int expected)
+	{
 		int behavior = predict_behavior(feat);
-		PrintFormat("[MLP] behavior = %1   (类别索引，取决于模型)", behavior);
+		string verdict = "FAIL";
+		if (behavior == expected)
+			verdict = "PASS";
+		PrintFormat("[MLP] %1 => %2   (期望 %3)  %4", tag, behavior, expected, verdict);
 	}
 };
