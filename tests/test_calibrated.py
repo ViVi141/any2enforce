@@ -1,5 +1,6 @@
 """Tests for mappings calibrated against the real Reforger scripts corpus."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -242,3 +243,15 @@ def test_training_lab_transpiles():
     assert "float lab_train_step(" in text
     assert "Math.Pow(2.718281828459045" in text
     assert "Math.Mod(" in text
+
+
+def test_lab_glue_matches_transpiled_signatures():
+    """The hand-written entity glue must only call lab_* functions that the
+    transpiled training_lab.c actually declares (flat namespace: a typo would
+    fail at compile time with no local feedback)."""
+    lab_c = (HERE.parent / "examples" / "training_lab.c").read_text(encoding="utf-8")
+    glue = (HERE.parent / "examples" / "training_lab_glue.c").read_text(encoding="utf-8")
+    calls = set(re.findall(r"\blab_\w+(?=\()", glue))
+    declared = set(re.findall(
+        r"^(?:void|float|int|array<float>) (lab_\w+)\(", lab_c, re.MULTILINE))
+    assert calls <= declared, f"glue calls undeclared functions: {calls - declared}"
