@@ -57,8 +57,8 @@ execCode VerifyEntry.Run()
 | V06 | `array.Contains` | `Any2EnforceVerify/V06_Contains.c` | true / false | ✅ true / false（`x in lst` 已实现） |
 | C01 | 基类默认构造隐式调用 | `Any2EnforceVerify/C01_BaseCtorImplicit.c` | 编译过→42（隐式调用成立） | ✅ **42（隐式调用定案）** |
 | C05 | ScriptInvoker 回调 | `Any2EnforceVerify/C05_ScriptInvoker.c` | 编译过→true | ✅ true |
-| P01 | 基类必选参数构造 | `Any2EnforceProbes/P01_BaseCtorRequiredArgs.c` | 预期编译失败（需显式调用） | ✅ **定案：失败（`Overloaded function not compatible`）→ 必须显式调用** |
-| P02 | 显式 super 构造语法 | `Any2EnforceProbes/P02_SuperCtorSyntax.c` | 候选 A/B/C 哪个能过 | ☐ **取消注释候选逐个测** |
+| P01 | 基类必选参数构造 | `Any2EnforceProbes/P01_BaseCtorRequiredArgs.c` | 预期编译失败（需显式调用） | ✅ **定案：派生构造声明同名必选参数，隐式转发**（本文件已改为正确写法，编译应过→输出 5） |
+| P02 | 显式 super 构造语法 | `Any2EnforceProbes/P02_SuperCtorSyntax.c` | 候选 A/B/C 哪个能过 | ✅ **定案：A/B/C 全失败 → 无显式语法，参数隐式转发**（本文件已改为正确写法，编译应过→输出 5） |
 | P03 | 运算符重载 | `Any2EnforceProbes/P03_OpOverload.c` | 预期全部失败（语料 0 命中） | ☐ **取消注释候选逐个测** |
 | P04 | char 类型 | `Any2EnforceProbes/P04_CharType.c` | 预期全部失败（无 char） | ☐ **取消注释候选逐个测** |
 | P05 | 浮点指数写法 `1e30`/`1.0E30` | `Any2EnforceProbes/P05_FloatLiteralExponent.c` | 按报错行号定位 | ✅ **定案：`1e30` 合法；`1.0E30`（大写 E）非法** |

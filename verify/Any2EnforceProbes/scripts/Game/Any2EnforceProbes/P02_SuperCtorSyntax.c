@@ -1,6 +1,9 @@
-// [P02] 显式基类构造语法探测（配合 P01：若 P01 编译失败才需要本文件）
-// 逐个取消注释一个"候选"，单独编译一次，记录哪个能通过。
-// 注意：本文件属于"探测包"，每次只测一个候选。
+// [P02] 显式基类构造语法探测 —— ✅ 已定案：不存在显式语法
+// 实测记录：候选 A `super();`、候选 B `super.基类名(5);`、候选 C `基类名(5);`
+//           均报 "Overloaded function not compatible"（报错在派生构造签名行）。
+// 结论（语料 SCR_TimerEntries.c 佐证）：派生构造声明与基类同名的必选参数，
+//       编译器隐式转发；无显式 super 调用。
+// 本文件即正确写法：预期编译通过；运行 Check() 应输出 5。
 
 class P02_SuperCtorSyntaxBase
 {
@@ -14,17 +17,13 @@ class P02_SuperCtorSyntaxBase
 
 class P02_SuperCtorSyntax : P02_SuperCtorSyntaxBase
 {
-	void P02_SuperCtorSyntax()
+	void P02_SuperCtorSyntax(int value)
 	{
-		// 候选 A：super() 空调用
-		//super();
+		PrintFormat("[P02] m_value = %1   (5 = 隐式转发定案)", m_value);
+	}
 
-		// 候选 B：super.基类名(参数)
-		//super.P02_SuperCtorSyntaxBase(5);
-
-		// 候选 C：直接用基类名调用
-		//P02_SuperCtorSyntaxBase(5);
-
-		PrintFormat("[P02] m_value = %1", m_value);
+	static void Check()
+	{
+		ref P02_SuperCtorSyntax d = new P02_SuperCtorSyntax(5);
 	}
 };

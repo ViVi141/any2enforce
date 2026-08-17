@@ -293,6 +293,22 @@ class PythonFrontend:
             return None  # docstring / standalone string -> comment
 
         if isinstance(node, ast.Expr):
+            if _is_super_init(node.value):
+                # settled: EnforceScript has no explicit base-ctor call syntax;
+                # ctor params are implicitly forwarded by name (verified
+                # SCR_TimerEntries.c + probes P01/P02). sema checks that the
+                # derived ctor declares the base's required params.
+                self.diag.warning(
+                    "super-init-dropped",
+                    "super().__init__(...) is dropped: the base ctor is called "
+                    "implicitly by EnforceScript (verified)",
+                    span,
+                    note="ensure the derived ctor declares the base ctor's "
+                         "required parameters (sema check 'ctor-forward')",
+                )
+                return UnsupportedStmt(
+                    "super().__init__() dropped (implicit base ctor, verified)",
+                    level="warning", span=span)
             expr = self._expr(node.value)
             return ExprStmt(expr, span=span)
 
@@ -488,30 +504,8 @@ class PythonFrontend:
                 [self._expr(c) for c in node.comparators], span=span)
 
         if isinstance(node, ast.Call):
-            # super() / super().method(...): base-call syntax is pending
-            # verification (P02). Base default ctor is implicitly called
-            # (verified C01), but a base with required-arg ctor needs an
-            # explicit call, whose EnforceScript syntax is still undecided.
-            if isinstance(node.func, ast.Name) and node.func.id == "super":
-                self.diag.error(
-                    "unsupported-super",
-                    "super() is not mapped in v0.1",
-                    span,
-                    note="base default ctor is called implicitly (verified); "
-                         "explicit base-call syntax pending probe P02",
-                )
-                return UnsupportedExpr("super() call", span=span)
-            if isinstance(node.func, ast.Attribute) \
-                    and isinstance(node.func.value, ast.Name) \
-                    and node.func.value.id == "super":
-                self.diag.error(
-                    "unsupported-super",
-                    f"super().{node.func.attr}() is not mapped in v0.1",
-                    span,
-                    note="base default ctor is called implicitly (verified); "
-                         "explicit base-call syntax pending probe P02",
-                )
-                return UnsupportedExpr("super() call", span=span)
+            # super() is allowed here only as the base of super().attr /
+            # super().method(); a truly bare super() is rejected by the backend.
             func = self._expr(node.func)
             args = [self._expr(a) for a in node.args]
             kwargs = []
@@ -647,3 +641,13 @@ def _is_entry_guard(test: ast.expr) -> bool:
             and len(test.comparators) == 1
             and isinstance(test.comparators[0], ast.Constant)
             and test.comparators[0].value == "__main__")
+
+
+def _is_super_init(node: ast.expr) -> bool:
+    """True for `super().__init__(...)`."""
+    return (isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "__init__"
+            and isinstance(node.func.value, ast.Call)
+            and isinstance(node.func.value.func, ast.Name)
+            and node.func.value.func.id == "super")

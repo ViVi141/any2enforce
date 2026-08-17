@@ -50,7 +50,7 @@
 | # | 构造 | 状态与实测 |
 |---|---|---|
 | 6 | int/int 除法结果类型 | ✅ `/` 是 float 除法（`7 / 2 == 3.5`）；**`int i = 7 / 2` 可编译**（P06 无报错，隐式转换合法；值为 3 还是 4 待运行确认）；`//` → `Math.Floor(a / b)` 语义正确（含负数 floor 语义） |
-| 13b | 显式基类构造调用 | ✅ **基类默认构造隐式调用**（C01=42）；**基类构造带必选参数时派生构造必须显式调用**（P01：`Overloaded function not compatible`）；显式调用语法待 P02 候选 A/B/C |
+| 13b | 显式基类构造调用 | ✅ **无显式语法，参数隐式转发**：基类默认构造 → 隐式调用（C01=42）；基类构造带必选参数 → 派生构造必须声明同名参数（P01/P02 报 `Overloaded function not compatible`；语料 `SCR_WorldTimerEntry(string name, World world) : SCR_TimerEntryBase(string name)`）；派生不写构造也可编译（`SCR_RealTimerEntry` 先例）。工具已实现 `ctor-forward` 检查 + `super().__init__` 丢弃 + `super().method`→`super.Method` |
 | 14 | 属性惯用法 | ☐ 引擎无 property，`@property` v0.1 报错，v0.2 生成 `GetX/SetX` |
 | 15 | 运算符重载 | ☐ 待 P03 候选（语料 0 命中，预期不支持） |
 | 16 | 回调/函数指针 | ✅ **ScriptInvoker 可用**（Insert + Invoke，C05=true）；`ScriptCaller` 不存在 |

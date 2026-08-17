@@ -94,3 +94,54 @@ def test_inline_array_literal_as_call_argument():
     _, text, diag = transpile(src, "t.py")
     assert diag.errors == []
     assert "Print(total({ 1, 2, 3 }));" in text
+
+
+def test_super_method_call_maps_to_super_dot():
+    src = ("class Base:\n"
+           "    def greet(self) -> str:\n"
+           "        return \"hi\"\n"
+           "class Derived(Base):\n"
+           "    def greet(self) -> str:\n"
+           "        return super().greet()\n")
+    _, text, diag = transpile(src, "t.py")
+    assert diag.errors == []
+    assert "return super.greet();" in text
+
+
+def test_super_init_dropped_with_warning():
+    src = ("class Base:\n"
+           "    def __init__(self, name: str):\n"
+           "        self.name = name\n"
+           "class Derived(Base):\n"
+           "    def __init__(self, name: str):\n"
+           "        super().__init__(name)\n"
+           "        self.extra = 1\n")
+    _, text, diag = transpile(src, "t.py")
+    assert diag.errors == []
+    assert any(d.code == "super-init-dropped" for d in diag.items)
+    assert "implicit base ctor" in text  # marker comment present
+
+
+def test_ctor_forward_missing_param_is_error():
+    src = ("class Base:\n"
+           "    def __init__(self, name: str, hp: int):\n"
+           "        self.name = name\n"
+           "        self.hp = hp\n"
+           "class Derived(Base):\n"
+           "    def __init__(self):\n"
+           "        pass\n")
+    _, _, diag = transpile(src, "t.py")
+    assert any(d.code == "ctor-forward" for d in diag.errors), \
+        [d.code for d in diag.errors]
+
+
+def test_ctor_forward_ok_when_params_declared():
+    src = ("class Base:\n"
+           "    def __init__(self, name: str):\n"
+           "        self.name = name\n"
+           "class Derived(Base):\n"
+           "    def __init__(self, name: str):\n"
+           "        self.tag = 1\n")
+    _, text, diag = transpile(src, "t.py")
+    assert diag.errors == []
+    assert "void Derived(string name)" in text

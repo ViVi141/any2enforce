@@ -570,8 +570,19 @@ class EnforceBackend:
                     e.span,
                 )
                 return "0"
+            if name == "super":
+                self.diag.error(
+                    "unsupported-super",
+                    "bare super() is not supported; only super().method(...) "
+                    "and super().__init__(...) are handled",
+                    e.span,
+                )
+                return "0"
             return f"{self._fn_id(name)}({', '.join(args)})"
         if isinstance(e.func, AttributeExpr):
+            if _is_super_expr(e.func.value):
+                # super().method(...) -> super.Method(...) (verified: 1357 files)
+                return f"super.{self._method_id(e.func.attr)}({', '.join(args)})"
             if isinstance(e.func.value, NameExpr) and e.func.value.name == "this":
                 # self.method(...) -> bare method call (verified convention)
                 return f"{self._method_id(e.func.attr)}({', '.join(args)})"
@@ -678,6 +689,8 @@ class EnforceBackend:
     # identifiers / atoms
     # ==================================================================
     def _attr_access(self, e: AttributeExpr) -> str:
+        if _is_super_expr(e.value):
+            return f"super.{e.attr}"  # super().attr (verified convention)
         obj = self._expr(e.value)
         if obj == "this":
             # self.field -> bare m_x, self.method -> bare method (verified
@@ -789,6 +802,15 @@ class EnforceBackend:
 
 def _is_simple(e: Expr) -> bool:
     return isinstance(e, (NameExpr, ConstExpr))
+
+
+def _is_super_expr(e: Expr) -> bool:
+    """True for `super()` (the call node, before an attribute access)."""
+    return (isinstance(e, CallExpr)
+            and isinstance(e.func, NameExpr)
+            and e.func.name == "super"
+            and not e.args
+            and not e.kwargs)
 
 
 def _escape(s: str) -> str:

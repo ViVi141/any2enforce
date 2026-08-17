@@ -51,6 +51,17 @@ class Analyzer:
     def run(self, mod: Module) -> Module:
         for fn in mod.functions:
             self.fn_returns[fn.name] = self._resolve_return(fn)
+        # collect each class's required ctor params (no default value) —
+        # EnforceScript implicitly forwards ctor params by name (verified
+        # SCR_TimerEntries.c: SCR_WorldTimerEntry(string name, World world)
+        # extends SCR_TimerEntryBase(string name); probes P01/P02)
+        self.class_required_ctor: Dict[str, List[str]] = {}
+        for cls in mod.classes:
+            req = []
+            for m in cls.methods:
+                if m.is_constructor:
+                    req = [p.name for p in m.params if p.default is None]
+            self.class_required_ctor[cls.name] = req
         for cls in mod.classes:
             self.class_names.add(cls.name)
             self._resolve_class(cls)
@@ -91,6 +102,32 @@ class Analyzer:
                 m.return_type = VOID
             else:
                 self._resolve_return(m)
+
+        # EnforceScript has no explicit base-ctor call syntax: ctor params are
+        # implicitly forwarded by name. A base with required ctor params forces
+        # the derived ctor to declare them (verified: P01/P02 compile errors +
+        # SCR_TimerEntries.c where SCR_WorldTimerEntry(string name, World world)
+        # extends SCR_TimerEntryBase(string name)).
+        for base in cls.bases:
+            req = self.class_required_ctor.get(base, [])
+            if not req:
+                continue
+            ctor = next((m for m in cls.methods if m.is_constructor), None)
+            if ctor is None:
+                continue  # no ctor at all compiles (SCR_RealTimerEntry precedent)
+            own = {p.name for p in ctor.params}
+            missing = [r for r in req if r not in own]
+            if missing:
+                self.diag.error(
+                    "ctor-forward",
+                    f"base class '{base}' constructor requires parameter(s) "
+                    f"{missing}; EnforceScript implicitly forwards constructor "
+                    "parameters (no super-call syntax) — declare them in "
+                    f"'{cls.name}' constructor",
+                    cls.span,
+                    note="rename the derived ctor params to match the base's "
+                         "required param names",
+                )
 
         # field hoisting: scan all method bodies for `this.<x> = ...`
         field_map: Dict[str, Tuple[Type, Optional[ConstExpr], int]] = {}
