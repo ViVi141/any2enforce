@@ -353,9 +353,9 @@ frontends/
 ## 12. 路线图
 
 - ✔ **v0.1（已完成）**：Python 子集（§4 表格内全部"支持"项）；CLI；诊断；金样测试；
-  语料校准（6568 个 `.c`）+ 真机验证（Workbench 编译/运行）全部定案；
-  **ML 展示**：前向数值对拍 8/8、反向传播训练器、游戏内现场学习（`training_lab`）；
-  **实体接入**：`training_lab_glue.c`（简单实体 + 真实车辆组件）、`entity_patterns.md`。
+  语料校准（6568 个 `.c`）+ 真机验证（Workbench 编译/运行）全部定案。
+  ML 展示（前向/训练器/游戏内现场学习）与实体接入已拆分为独立仓库
+  `reforger-ml-lab`（含 `training_lab`、`training_lab_glue.c`、`entity_patterns.md`）。
 - **v0.2**：推导式展开、模块级初始化 → `Init`、`@property`、回调/`ScriptInvoker`（已定案）、
   列表字面量全面放开、静态字段/lazy-init、Adam 优化器、`--report json` CI 集成。
 - **v0.3**：tree-sitter 前端框架 + TypeScript/Java 前端；接口降级映射。

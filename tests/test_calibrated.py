@@ -1,6 +1,9 @@
-"""Tests for mappings calibrated against the real Reforger scripts corpus."""
+"""Tests for mappings calibrated against the real Reforger scripts corpus.
 
-import re
+ML experiment tests (mlp_forward / train_mlp / training_lab / glue) moved to
+the dedicated ML repository (reforger-ml-lab) in the repo split.
+"""
+
 from pathlib import Path
 
 import pytest
@@ -187,35 +190,6 @@ def test_block_vars_used_after_are_hoisted():
     assert "return z;" in text
 
 
-def test_mlp_forward_round_trip():
-    """The ANNA-style MLP forward pass must transpile cleanly and keep the
-    engine idioms: Math.Pow for exp, Insert for append, per-loop z."""
-    mlp = HERE.parent / "examples" / "mlp_forward.py"
-    source = mlp.read_text(encoding="utf-8")
-    _, text, diag = transpile(source, filename=str(mlp))
-    assert diag.errors == [], "\n".join(d.render_text() for d in diag.errors)
-    assert "Math.Pow(2.718281828459045, x)" in text
-    assert "probs.Insert(value);" in text
-    assert "float z = 0.0;" in text      # z reused across loops -> hoisted
-    assert text.count("auto z = ") == 0
-    assert "array<float> w1 = {" in text
-
-
-def test_in_game_trainer_transpiles():
-    """The backprop+SDG trainer (in-game self-training POC) must transpile
-    cleanly and keep engine idioms (Math.Mod for float %, Insert, Math.Pow)."""
-    trainer = HERE.parent / "examples" / "train_mlp.py"
-    source = trainer.read_text(encoding="utf-8")
-    _, text, diag = transpile(source, filename=str(trainer))
-    assert diag.errors == [], "\n".join(d.render_text() for d in diag.errors)
-    assert "Math.Mod(" in text          # LCG float modulo
-    assert "Math.Pow(2.718281828459045" in text  # exp
-    assert "w1.Insert(" in text         # append -> Insert
-    assert "PrintFormat(\"%1 %2\", epoch, loss);" in text
-    assert "float z = 0.0;" in text      # z hoisted to function scope
-    assert text.count("auto z = ") == 0
-
-
 def test_global_function_prefix():
     """EnforceScript has one flat namespace: --prefix applies to global
     functions (declaration and calls) but not methods or locals."""
@@ -233,20 +207,6 @@ def test_global_function_prefix():
     assert "M_helper(x);" in text          # call inside method also prefixed
     assert "int method(int x)" in text      # methods NOT prefixed
     assert "M_method" not in text
-
-
-def test_training_lab_transpiles():
-    """The in-game training laboratory (virtual chase, teacher-driven data
-    collection + model-driven evaluation) must transpile cleanly."""
-    lab = HERE.parent / "examples" / "training_lab.py"
-    source = lab.read_text(encoding="utf-8")
-    _, text, diag = transpile(source, filename=str(lab))
-    assert diag.errors == [], "\n".join(d.render_text() for d in diag.errors)
-    assert "int lab_teacher(float dx, float dy)" in text
-    assert "void lab_run()" in text
-    assert "float lab_train_step(" in text
-    assert "Math.Pow(2.718281828459045" in text
-    assert "Math.Mod(" in text
 
 
 def test_if_else_assign_used_after_is_hoisted():
@@ -277,15 +237,3 @@ def test_array_field_gets_ref():
     assert diag.errors == []
     assert "protected ref array<int> m_items;" in text
     assert "protected ref map<string, int> m_table;" in text
-
-
-def test_lab_glue_matches_transpiled_signatures():
-    """The hand-written entity glue must only call lab_* functions that the
-    transpiled training_lab.c actually declares (flat namespace: a typo would
-    fail at compile time with no local feedback)."""
-    lab_c = (HERE.parent / "examples" / "training_lab.c").read_text(encoding="utf-8")
-    glue = (HERE.parent / "examples" / "training_lab_glue.c").read_text(encoding="utf-8")
-    calls = set(re.findall(r"\blab_\w+(?=\()", glue))
-    declared = set(re.findall(
-        r"^(?:void|float|int|array<float>) (lab_\w+)\(", lab_c, re.MULTILINE))
-    assert calls <= declared, f"glue calls undeclared functions: {calls - declared}"

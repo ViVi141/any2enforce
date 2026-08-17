@@ -10,13 +10,9 @@
 
 ## 一句话成果
 
-**Python（numpy-free 子集）写的算法代码，一键转成可编译、可运行、数值等价的 EnforceScript ——
-并已在游戏里跑通"神经网络现场学习"全链路。**
-
-```
-Python ML 代码 → 工具转换(0 错误) → 游戏内编译(0 错误) → 运行
-→ 前向数值等价(8/8 跨类别 PASS) + 训练收敛(loss 0.5→0.0007) + 现场学习(acc 100%)
-```
+**Python（numpy-free 子集）写的算法代码，一键转成可编译、可运行、数值等价的 EnforceScript。**
+语法映射经 6568 文件语料校准 + 真实 Workbench 编译/运行验证全部定案。
+ML 端到端证明（游戏内神经网络现场学习）见独立仓库 [reforger-ml-lab](https://github.com/ViVi141/reforger-ml-lab)。
 
 ---
 
@@ -41,17 +37,15 @@ any2enforce examples/train_mlp.py --out build/train_mlp.c --prefix T_
 
 ## 示例画廊（examples/）
 
-| 文件 | 内容 | 在游戏里 |
-|---|---|---|
-| `demo.py` → `demo.c` | 基础语法映射（类/继承/字段/循环） | 编译即可 |
-| `calibrated.py` → `calibrated.c` | 实测定案的映射（Contains/内联数组/Math 分派） | 编译即可 |
-| `mlp_forward.py` → `mlp_forward.c` | ANNA 同构 MLP 前向（4→8→3） | `execCode TestMLP.Run()` → **8/8 PASS** |
-| `train_mlp.py` → `train_mlp.c` | 手写反向传播 + SGD 训练器 | `execCode run_training()` → **loss 收敛** |
-| `training_lab.py` → `training_lab.c` | **游戏内现场学习**：AI 学会追目标 | `execCode lab_run()` → **acc 100%** |
-| `training_lab_glue.c` | 真实实体壳：简单实体 + 真实车辆组件 | WorldEditor 摆实体跑 |
-| `entity_patterns.md` | 实体处理模式（学自 ANNA + RSS） | 文档 |
+| 文件 | 内容 |
+|---|---|
+| `demo.py` → `demo.c` | 基础语法映射（类/继承/字段/循环） |
+| `calibrated.py` → `calibrated.c` | 实测定案的映射（Contains/内联数组/Math 分派） |
 
-配套测试壳：`mlp_test.c`（8 向量数值对拍）。
+> **ML 实验（游戏内神经网络前向/训练/现场学习）已拆分为独立仓库：
+> [reforger-ml-lab](https://github.com/ViVi141/reforger-ml-lab)** —— 含
+> `mlp_forward`（数值对拍 8/8）、`train_mlp`（反向传播训练器）、`training_lab`
+> （游戏内现场学习 acc 100%）、真实实体壳与实体模式文档。
 
 ---
 
