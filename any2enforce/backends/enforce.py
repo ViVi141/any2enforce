@@ -586,14 +586,14 @@ class EnforceBackend:
         if e.op == "**":
             return f"Math.Pow({l}, {r})"
         if e.op == "%":
-            lt, rt = self._expr_type(e.left), self._expr_type(e.right)
+            lt = self._expr_type(e.left)
             if lt is STRING:
                 return self._py_string_format(e.left, e.right)
-            if lt is INT and rt is INT:
-                return f"{l} % {r}"  # int modulo (verified: `x % 360`)
-            if lt is FLOAT or rt is FLOAT:
-                return f"Math.Mod({l}, {r})"  # float modulo (Math.Mod verified)
-            return f"{l} % {r}"
+            # EnforceScript has no reliable '%' operator: the user's compiler
+            # rejects `int % int` ('Unknown operator %') despite one corpus
+            # sample; the shipped int-modulo idiom is Math.Mod (verified:
+            # `switch (Math.Mod(i, 3))`). Always emit Math.Mod.
+            return f"Math.Mod({l}, {r})"
         return f"{l} {e.op} {r}"
 
     def _py_string_format(self, fmt_expr: Expr, val_expr: Expr) -> str:

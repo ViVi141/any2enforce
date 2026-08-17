@@ -59,6 +59,15 @@ def test_array_and_map_literals():
 def test_float_modulo_uses_math_mod():
     _, text, _ = transpile("def f(deg: float) -> float:\n    return deg % 360.0\n", "t.py")
     assert "Math.Mod(deg, 360.0)" in text
+    assert "%" not in text
+
+
+def test_int_modulo_uses_math_mod():
+    """EnforceScript '%' is unreliable (user compiler rejects int % int):
+    int modulo must also emit Math.Mod."""
+    _, text, _ = transpile("def f(i: int, n: int) -> int:\n    return i % n\n", "t.py")
+    assert "Math.Mod(i, n)" in text
+    assert "%" not in text
 
 
 def test_param_default_emitted():

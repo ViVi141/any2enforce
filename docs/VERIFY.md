@@ -68,7 +68,7 @@
 |---|---|---|
 | 2b | `array.Contains` | ✅ `a.Contains(2) == true`、`a.Contains(9) == false` —— `x in lst` → `lst.Contains(x)` 已实现；map 待 P09 |
 | 4b | 内联数组实参 `{...}` | ✅ `Sum({1, 2, 3}) == 6` —— 列表字面量可直接作实参（v0.2 放开其余表达式位置） |
-| 7 | float 取模 | ✅ **float 直接 `%` 非法**（P07：`Unknown operator '%'`）→ **必须 `Math.Mod`**（实测 1.5）；emitter 现状正确 |
+| 7 | float 取模 | ✅ **`%` 运算符不可靠**：用户编译器实测 `int % int` 报 `Unknown operator '%'`（语料仅 1 处 `% 360` 疑为旧代码）；**取模一律 `Math.Mod`**（官方 int 用法实锤：`switch (Math.Mod(i, 3))` in SCR_MultiPartDeployableItemComponent）；`Math.Mod(5.5, 2.0) == 1.5` 运行验证 |
 | 12 | 构造函数 + 默认参数 | ✅ `void ClassName(...)` + `= 默认值` 运行时正常 |
 
 ## 语料事实速查（其他发现）
