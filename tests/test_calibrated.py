@@ -195,3 +195,17 @@ def test_mlp_forward_round_trip():
     assert "probs.Insert(value);" in text
     assert text.count("auto z = ") == 2
     assert "array<float> w1 = {" in text
+
+
+def test_in_game_trainer_transpiles():
+    """The backprop+SDG trainer (in-game self-training POC) must transpile
+    cleanly and keep engine idioms (Math.Mod for float %, Insert, Math.Pow)."""
+    trainer = HERE.parent / "examples" / "train_mlp.py"
+    source = trainer.read_text(encoding="utf-8")
+    _, text, diag = transpile(source, filename=str(trainer))
+    assert diag.errors == [], "\n".join(d.render_text() for d in diag.errors)
+    assert "Math.Mod(" in text          # LCG float modulo
+    assert "Math.Pow(2.718281828459045" in text  # exp
+    assert "w1.Insert(" in text         # append -> Insert
+    assert "PrintFormat(\"%1 %2\", epoch, loss);" in text
+    assert text.count("auto z = ") == 2  # block-scoped per loop
