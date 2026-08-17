@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "any2enforce"
+version = "0.1.0"
+description = "Translate common programming languages (Python first) to EnforceScript (Arma Reforger / Enfusion)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "any2enforce" }]
+
+[project.scripts]
+any2enforce = "any2enforce.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["any2enforce*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
