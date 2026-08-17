@@ -13,23 +13,29 @@ Any2EnforceProbes/   # 语法探测：每个文件单独复制、单独编译（
 `execCode` 是表达式执行器，只能执行表达式/语句，**不能声明 `class`**——
 你会得到 `error: Broken expression (missing ';'?)`（把 `class X` 当表达式解析了）。
 
-正确流程（两步）：
+**另一个坑**：ValidateScripts 只是**编译**，编译过 ≠ 运行时 VM 里有你的类。
+`execCode` 报 `Can't find variable 'VerifyEntry'` = 你在没有加载 Game 脚本的
+上下文里执行（典型：Workbench 编辑器里没进 Play 就 exec）。
 
-1. **编译**：把 `.c` 文件放进 addon 的 `scripts/Game/Any2EnforceVerify/` 目录，
-   在 Workbench 里 **ValidateScripts** —— 类定义在这里编译；
-2. **运行**：编译通过后，才在控制台 / execCode / 任意组件里调用入口：
-   ```
-   VerifyEntry.Run()
-   ```
-   （EnforceScript 无命名空间，类名就是 `VerifyEntry`；也可以单独调用
-   `V01_IntDivision.Check()` 等任意一个检查。）
+## 怎么运行（二选一）
+
+**方案 A（推荐，免控制台）**：把 `RunOnGameStart.c` 一起放进
+`scripts/Game/Any2EnforceVerify/`，编译后直接进游戏跑任意带 GameMode 的任务，
+游戏模式启动时自动打印 `[V01]`~`[C05]` 结果。不需要 execCode。
+（或者：在你现有组件的 `OnPostInit` 里加一行 `VerifyEntry.Run();`。）
+
+**方案 B（控制台）**：先从 Workbench **Play 启动游戏**（确保 addon 加载），
+在游戏内控制台（`~`）执行：
+```
+execCode VerifyEntry.Run()
+```
+或直接调用单个检查，如 `execCode V01_IntDivision.Check()`。
 
 ## 步骤
 
 1. 把 `Any2EnforceVerify/scripts` 下的 `Game/Any2EnforceVerify/` 复制到你的 addon 的
    `scripts/Game/` 下，在 Workbench 里 **ValidateScripts** —— 预期 0 错误；
-2. 编译通过后运行自检：execCode / 游戏控制台 / 任意组件的 `OnPostInit` 中调用
-   `VerifyEntry.Run();`，按控制台输出核对下表；
+2. 运行自检（方案 A 或 B，见上）：进游戏后按控制台输出核对下表；
 3. 把 `Any2EnforceProbes/scripts` 下的 `Game/Any2EnforceProbes/` **一个文件一个文件**
    复制进 `scripts/Game/`（或把文件逐个丢进现有目录），每次 ValidateScripts，
    按文件头注释取消注释候选语法，记录结果；
