@@ -228,3 +228,17 @@ def test_global_function_prefix():
     assert "M_helper(x);" in text          # call inside method also prefixed
     assert "int method(int x)" in text      # methods NOT prefixed
     assert "M_method" not in text
+
+
+def test_training_lab_transpiles():
+    """The in-game training laboratory (virtual chase, teacher-driven data
+    collection + model-driven evaluation) must transpile cleanly."""
+    lab = HERE.parent / "examples" / "training_lab.py"
+    source = lab.read_text(encoding="utf-8")
+    _, text, diag = transpile(source, filename=str(lab))
+    assert diag.errors == [], "\n".join(d.render_text() for d in diag.errors)
+    assert "int lab_teacher(float dx, float dy)" in text
+    assert "void lab_run()" in text
+    assert "float lab_train_step(" in text
+    assert "Math.Pow(2.718281828459045" in text
+    assert "Math.Mod(" in text
