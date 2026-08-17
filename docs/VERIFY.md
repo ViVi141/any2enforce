@@ -80,6 +80,7 @@
 - **`Math.E` 静态常量存在**（Math.Exp/Math.Tanh 不存在）→ exp 的标准做法是 `Math.Pow(Math.E, x)`（ANNA MLP 惯例，带 ±20 钳制）；tanh 用快速有理近似 `x / (1.0 + Math.AbsFloat(x))`。
 - **`notnull` / `out` 参数为生产惯例**（ANNA 72 处 notnull）。
 - 神经网络权重惯例（ANNA 生产代码）：扁平 `array<float>` + 索引算术（`W[r*cols+c]`）+ `{}` 字面量 + 惰性静态初始化（`if (s_Weights) return;`）；模型在 Python 中训练、以常量块导出（`// WEIGHTS_BEGIN/END` 标记）。
+- **`float` = 32 位单精度（float32）**（由游戏内训练对拍推断：同一训练器 epoch-0 loss，游戏内 0.504 ≈ float32 仿真 0.512，Python float64 为 0.653；收敛形态一致、轨迹不同，float32 下 loss 下限更高）。含义：生成代码与 Python float64 参考只保证**近似**一致；ML 训练本就以 float32 为业界标准，游戏内训练无碍，精确对拍需在 Python 侧也用 float32。
 - `NULL` 只见于引擎 proto 签名默认值；业务代码一律小写 `null`。
 - 模块级可执行代码不存在 —— Reforger 全靠类/组件/实体驱动（印证 v0.1"只输出函数与类"的取舍）。
 
