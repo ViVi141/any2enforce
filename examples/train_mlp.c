@@ -8,6 +8,11 @@
 // （float 取模，Python 与 EnforceScript 的 IEEE 结果一致）。
 // 运行：转换后用 execCode run_training()，应打印 30 轮单调下降的 loss。
 // 验证：本文件在 Python 里先跑通（loss 下降），再转成 EnforceScript 对拍。
+// 
+// ⚠ 命名空间教训：EnforceScript 无模块，全部脚本一起编译 —— 全局函数名
+// 必须全项目唯一（与 mlp_forward.c 的 relu/softmax 撞名会报
+// "Multiple declaration of function"）。故辅助函数统一加 train_ 前缀；
+// 工具侧可用 --prefix 选项统一加前缀。
 float train_relu(float x)
 {
     if (x > 0.0)
@@ -110,10 +115,12 @@ float train_epoch(array<float> xs, array<float> ys, array<float> w1, array<float
         {
             x_norm.Insert(xs[(s * feature_count) + fi]);
         }
+        int wbase = 0;
+        float z = 0.0;
         for (int hi = 0; hi < hidden_size; hi++)
         {
-            auto z = b1[hi];
-            auto wbase = hi * feature_count;
+            z = b1[hi];
+            wbase = hi * feature_count;
             for (int fi = 0; fi < feature_count; fi++)
             {
                 z = z + (w1[wbase + fi] * x_norm[fi]);
@@ -124,8 +131,8 @@ float train_epoch(array<float> xs, array<float> ys, array<float> w1, array<float
         array<float> z2 = {  };
         for (int ci = 0; ci < class_count; ci++)
         {
-            auto z = b2[ci];
-            auto wbase = ci * hidden_size;
+            z = b2[ci];
+            wbase = ci * hidden_size;
             for (int hi = 0; hi < hidden_size; hi++)
             {
                 z = z + (w2[wbase + hi] * h1[hi]);
@@ -141,9 +148,10 @@ float train_epoch(array<float> xs, array<float> ys, array<float> w1, array<float
             total_loss = total_loss + (e * e);
         }
         array<float> dh = {  };
+        float g = 0.0;
         for (int hi = 0; hi < hidden_size; hi++)
         {
-            auto g = 0.0;
+            g = 0.0;
             for (int ci = 0; ci < class_count; ci++)
             {
                 g = g + (w2[(ci * hidden_size) + hi] * err[ci]);
@@ -153,7 +161,7 @@ float train_epoch(array<float> xs, array<float> ys, array<float> w1, array<float
         for (int ci = 0; ci < class_count; ci++)
         {
             b2[ci] = b2[ci] - (lr * err[ci]);
-            auto wbase = ci * hidden_size;
+            wbase = ci * hidden_size;
             for (int hi = 0; hi < hidden_size; hi++)
             {
                 w2[wbase + hi] = w2[wbase + hi] - ((lr * err[ci]) * h1[hi]);
@@ -161,9 +169,9 @@ float train_epoch(array<float> xs, array<float> ys, array<float> w1, array<float
         }
         for (int hi = 0; hi < hidden_size; hi++)
         {
-            auto g = dh[hi] * train_relu_deriv(z1[hi]);
+            g = dh[hi] * train_relu_deriv(z1[hi]);
             b1[hi] = b1[hi] - (lr * g);
-            auto wbase = hi * feature_count;
+            wbase = hi * feature_count;
             for (int fi = 0; fi < feature_count; fi++)
             {
                 w1[wbase + fi] = w1[wbase + fi] - ((lr * g) * x_norm[fi]);

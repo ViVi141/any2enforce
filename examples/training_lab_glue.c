@@ -24,9 +24,10 @@ class TrainingLabComponent : ScriptComponent
 	protected float m_fTick;
 
 	// 训练缓冲（布局与 training_lab.py 一致：每样本 4 特征 + 4 维 one-hot + 类别）
-	protected array<float> m_aBufX = {};
-	protected array<float> m_aBufY = {};
-	protected array<int> m_aLabels = {};
+	// 注意：array/map/set 字段必须 ref（EnforceScript 强引用要求）
+	protected ref array<float> m_aBufX = {};
+	protected ref array<float> m_aBufY = {};
+	protected ref array<int> m_aLabels = {};
 
 	protected ref array<float> m_W1 = new array<float>();
 	protected ref array<float> m_B1 = new array<float>();

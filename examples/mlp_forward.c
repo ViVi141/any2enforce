@@ -91,10 +91,12 @@ int predict_behavior(array<float> features)
         x_norm.Insert((features[fi] - means[fi]) / scale);
     }
     array<float> hidden = {  };
+    int wbase = 0;
+    float z = 0.0;
     for (int hi = 0; hi < hidden_size; hi++)
     {
-        auto z = b1[hi];
-        auto wbase = hi * feature_count;
+        z = b1[hi];
+        wbase = hi * feature_count;
         for (int fi = 0; fi < feature_count; fi++)
         {
             z = z + (w1[wbase + fi] * x_norm[fi]);
@@ -104,8 +106,8 @@ int predict_behavior(array<float> features)
     array<float> logits = {  };
     for (int ci = 0; ci < class_count; ci++)
     {
-        auto z = b2[ci];
-        auto wbase = ci * hidden_size;
+        z = b2[ci];
+        wbase = ci * hidden_size;
         for (int hi = 0; hi < hidden_size; hi++)
         {
             z = z + (w2[wbase + hi] * hidden[hi]);

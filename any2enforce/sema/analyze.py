@@ -229,20 +229,32 @@ class Analyzer:
                 if stmt.value:
                     self._analyze_expr(stmt.value, env)
             elif isinstance(stmt, IfStmt):
+                branch_envs = []
                 for cond, body2 in stmt.branches:
                     self._analyze_expr(cond, env)
-                    self._analyze_body(body2, dict(env))
-                self._analyze_body(stmt.orelse, dict(env))
+                    branch_envs.append(self._analyze_body(body2, dict(env)))
+                branch_envs.append(self._analyze_body(stmt.orelse, dict(env)))
+                # Python: names assigned in any branch are function-scoped
+                for benv in branch_envs:
+                    for name, t in benv.items():
+                        if name not in env:
+                            env[name] = t
             elif isinstance(stmt, WhileStmt):
                 self._analyze_expr(stmt.cond, env)
-                self._analyze_body(stmt.body, dict(env))
+                benv = self._analyze_body(stmt.body, dict(env))
+                for name, t in benv.items():
+                    if name not in env:
+                        env[name] = t
             elif isinstance(stmt, RangeForStmt):
                 self._analyze_expr(stmt.lo, env)
                 self._analyze_expr(stmt.hi, env)
                 if stmt.step:
                     self._analyze_expr(stmt.step, env)
                 env[stmt.target.name] = INT
-                self._analyze_body(stmt.body, dict(env))
+                benv = self._analyze_body(stmt.body, dict(env))
+                for name, t in benv.items():
+                    if name not in env:
+                        env[name] = t
             elif isinstance(stmt, ForStmt):
                 self._analyze_expr(stmt.iterable, env)
                 it = self._infer(stmt.iterable, env)
@@ -264,7 +276,10 @@ class Analyzer:
                     )
                     stmt.elem_type = ErrorType(fallback="auto")
                 env[stmt.target.name] = stmt.elem_type
-                self._analyze_body(stmt.body, dict(env))
+                benv = self._analyze_body(stmt.body, dict(env))
+                for name, t in benv.items():
+                    if name not in env:
+                        env[name] = t
         return env
 
     # ------------------------------------------------------------------

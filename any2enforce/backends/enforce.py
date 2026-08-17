@@ -7,6 +7,7 @@ validation loop (validate/workbench.py) is the source of truth for them.
 
 from __future__ import annotations
 
+from dataclasses import fields as dc_fields
 from typing import Dict, List, Optional
 
 from ..diagnostics import DiagnosticSink
@@ -108,7 +109,10 @@ class EnforceBackend:
                 note = ""
                 if f.default is not None:
                     note = f"  // was initialized to {self._const(f.default)} in Python"
-                self._line(f"{self.visibility} {self._type(f.type)} {self._field_id(f.name)};{note}")
+                # array/map/set fields are ref types in EnforceScript
+                # (verified: `protected ref array<float> s_Means;` in ANNA)
+                self._line(f"{self.visibility} {self._field_type(f.type)} "
+                           f"{self._field_id(f.name)};{note}")
             self._line("")
         for i, m in enumerate(cls.methods):
             if i:
@@ -152,7 +156,10 @@ class EnforceBackend:
         self.indent += 1
         if not body:
             self._line("// (empty body from Python 'pass' / docstring)")
-        for stmt in body:
+        stmts = list(body)
+        for i, stmt in enumerate(stmts):
+            if isinstance(stmt, (IfStmt, WhileStmt, RangeForStmt, ForStmt)):
+                self._hoist_block_vars(stmt, stmts[i + 1:])
             self._stmt(stmt)
         self.indent -= 1
         self._line("}")
@@ -169,6 +176,82 @@ class EnforceBackend:
             self._scopes[-1].add(name)
         else:
             self._scopes.append({name})
+
+    def _hoist_block_vars(self, stmt: Stmt, remaining: List[Stmt]) -> None:
+        """Names first-assigned inside a nested block (if/while/for body) but
+        used AFTER the block are function-scoped in Python but block-scoped in
+        EnforceScript — declare them at the current level first (typed, from
+        sema), then the block assignments become plain assignments."""
+        assigned = set()
+        self._assigned_in(stmt, assigned)
+        if not assigned:
+            return
+        used: set = set()
+        for s in remaining:
+            self._collect_names(s, used)
+        for name in sorted(assigned & used):
+            if self._in_scope(name):
+                continue
+            t = self._locals.get(name)
+            if t is None:
+                self.diag.warning(
+                    "hoist-type",
+                    f"cannot determine type for hoisted variable '{name}'",
+                    getattr(stmt, "span", None),
+                )
+                self._line(f"auto {self._var_id(name)} = 0;")
+            else:
+                self._line(f"{self._type(t)} {self._var_id(name)}"
+                           f" = {self._default_init(t)};")
+            self._declare(name)
+
+    def _assigned_in(self, node, out: set) -> None:
+        if isinstance(node, (AssignStmt, AugAssignStmt)) \
+                and isinstance(node.target, NameExpr):
+            out.add(node.target.name)
+        elif isinstance(node, AnnAssignStmt) and isinstance(node.target, NameExpr):
+            out.add(node.target.name)
+        elif isinstance(node, IfStmt):
+            for _, body in node.branches:
+                for s in body:
+                    self._assigned_in(s, out)
+            for s in node.orelse:
+                self._assigned_in(s, out)
+        elif isinstance(node, (WhileStmt, RangeForStmt, ForStmt)):
+            for s in node.body:
+                self._assigned_in(s, out)
+
+    def _collect_names(self, node, out: set) -> None:
+        """Collect every NameExpr in the IR subtree (used for lookahead)."""
+        if isinstance(node, NameExpr):
+            out.add(node.name)
+            return
+        for f in dc_fields(node):
+            v = getattr(node, f.name)
+            if isinstance(v, (Expr, Stmt)):
+                self._collect_names(v, out)
+            elif isinstance(v, list):
+                for item in v:
+                    if isinstance(item, (Expr, Stmt)):
+                        self._collect_names(item, out)
+                    elif isinstance(item, tuple):
+                        for sub in item:
+                            if isinstance(sub, (Expr, Stmt)):
+                                self._collect_names(sub, out)
+                            elif isinstance(sub, list):
+                                for s2 in sub:
+                                    if isinstance(s2, (Expr, Stmt)):
+                                        self._collect_names(s2, out)
+
+    def _default_init(self, t: Type) -> str:
+        if isinstance(t, ScalarType):
+            return {"int": "0", "float": "0.0", "bool": "false",
+                    "string": '""'}.get(t.name, "0")
+        if isinstance(t, ArrayType):
+            return "{ }"
+        if isinstance(t, MapType):
+            return f"new {t.render()}()"
+        return "null"
 
     def _stmt(self, stmt: Stmt) -> None:
         if isinstance(stmt, AssignStmt):
@@ -228,7 +311,8 @@ class EnforceBackend:
             self._line(f"// [any2enforce:error] unhandled statement {type(stmt).__name__}")
 
     def _assign(self, stmt: AssignStmt) -> None:
-        if isinstance(stmt.target, NameExpr) and isinstance(stmt.value, DictExpr):
+        if isinstance(stmt.value, DictExpr):
+            # dict literal -> map literal lowering (name or field target)
             self._map_literal(stmt.target, stmt.value)
             return
         if isinstance(stmt.value, ListExpr):
@@ -272,9 +356,10 @@ class EnforceBackend:
         else:
             self._line(f"{self._expr(stmt.target)} = {lit};")
 
-    def _map_literal(self, target: NameExpr, d: DictExpr) -> None:
+    def _map_literal(self, target: Expr, d: DictExpr) -> None:
         """dict literal -> `map<K,V> name = new map<K,V>(); name[k] = v; ...`
-        (map subscript `[]` read/write verified against Reforger scripts)"""
+        (map subscript `[]` read/write verified against Reforger scripts).
+        Target may be a local name or a field (`self.x = {...}`)."""
         kt, vt = self._dict_types(d)
         if kt is None or vt is None:
             self.diag.error(
@@ -284,13 +369,17 @@ class EnforceBackend:
                 d.span,
             )
             kt, vt = kt or FLOAT, vt or FLOAT
-        name = self._var_id(target.name)
-        decl = f"map<{kt.render()}, {vt.render()}> {name} = new map<{kt.render()}, {vt.render()}>();"
-        if self._in_scope(target.name):
-            self._line(f"{name} = new map<{kt.render()}, {vt.render()}>();")
+        if isinstance(target, NameExpr):
+            name = self._var_id(target.name)
+            if self._in_scope(target.name):
+                self._line(f"{name} = new map<{kt.render()}, {vt.render()}>();")
+            else:
+                self._declare(target.name)
+                self._line(f"map<{kt.render()}, {vt.render()}> {name} = "
+                           f"new map<{kt.render()}, {vt.render()}>();")
         else:
-            self._declare(target.name)
-            self._line(decl)
+            name = self._expr(target)
+            self._line(f"{name} = new map<{kt.render()}, {vt.render()}>();")
         for k, v in d.items:
             self._line(f"{name}[{self._expr(k)}] = {self._expr(v)};")
 
@@ -765,6 +854,14 @@ class EnforceBackend:
     # naming policy
     # ------------------------------------------------------------------
     def _type(self, t: Type) -> str:
+        return t.render()
+
+    def _field_type(self, t: Type) -> str:
+        """Class fields of array/map/set type must be `ref` (verified ANNA:
+        `protected static ref array<float> s_Means;`). ClassType.render
+        already includes `ref Foo`."""
+        if isinstance(t, (ArrayType, MapType, SetType)):
+            return "ref " + t.render()
         return t.render()
 
     def _type_id(self, name: str) -> str:

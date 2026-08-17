@@ -168,10 +168,10 @@ def test_list_append_maps_to_insert():
     assert "xs.Insert(2);" in text
 
 
-def test_block_scoped_redeclaration():
-    """Python is function-scoped, EnforceScript is block-scoped: a variable
-    assigned inside two sibling loops must be declared with `auto` in each
-    (matches ANNA's per-loop `float z = ...` idiom)."""
+def test_block_vars_used_after_are_hoisted():
+    """Python is function-scoped, EnforceScript block-scoped: a variable
+    assigned inside loops but read AFTER them is hoisted to a typed
+    declaration at function scope (the loops then reuse it)."""
     src = ("def f(a: list[float], b: list[float], n: int) -> float:\n"
            "    for i in range(n):\n"
            "        z = a[i]\n"
@@ -182,7 +182,9 @@ def test_block_scoped_redeclaration():
            "    return z\n")
     _, text, diag = transpile(src, "t.py")
     assert diag.errors == []
-    assert text.count("auto z = ") == 2, text
+    assert "float z = 0.0;" in text       # hoisted typed declaration
+    assert text.count("auto z = ") == 0   # loops reuse the hoisted variable
+    assert "return z;" in text
 
 
 def test_mlp_forward_round_trip():
@@ -194,7 +196,8 @@ def test_mlp_forward_round_trip():
     assert diag.errors == [], "\n".join(d.render_text() for d in diag.errors)
     assert "Math.Pow(2.718281828459045, x)" in text
     assert "probs.Insert(value);" in text
-    assert text.count("auto z = ") == 2
+    assert "float z = 0.0;" in text      # z reused across loops -> hoisted
+    assert text.count("auto z = ") == 0
     assert "array<float> w1 = {" in text
 
 
@@ -209,7 +212,8 @@ def test_in_game_trainer_transpiles():
     assert "Math.Pow(2.718281828459045" in text  # exp
     assert "w1.Insert(" in text         # append -> Insert
     assert "PrintFormat(\"%1 %2\", epoch, loss);" in text
-    assert text.count("auto z = ") == 2  # block-scoped per loop
+    assert "float z = 0.0;" in text      # z hoisted to function scope
+    assert text.count("auto z = ") == 0
 
 
 def test_global_function_prefix():
@@ -243,6 +247,36 @@ def test_training_lab_transpiles():
     assert "float lab_train_step(" in text
     assert "Math.Pow(2.718281828459045" in text
     assert "Math.Mod(" in text
+
+
+def test_if_else_assign_used_after_is_hoisted():
+    """`best` assigned in BOTH branches and read after the if/else must be
+    hoisted to a typed declaration (was: 'Can't find variable best')."""
+    src = ("def f(x: int) -> int:\n"
+           "    if x > 0:\n"
+           "        best = x\n"
+           "    else:\n"
+           "        best = -x\n"
+           "    return best\n")
+    _, text, diag = transpile(src, "t.py")
+    assert diag.errors == [], [d.code for d in diag.errors]
+    assert "int best = 0;" in text
+    assert text.count("auto best") == 0
+    assert "best = x;" in text
+    assert "best = -x;" in text
+
+
+def test_array_field_gets_ref():
+    """array/map/set fields must be `ref` (verified ANNA:
+    `protected static ref array<float> s_Means;`) — was: 'not strong ref'."""
+    src = ("class C:\n"
+           "    def __init__(self):\n"
+           "        self.items = [1, 2]\n"
+           "        self.table = {\"a\": 1}\n")
+    _, text, diag = transpile(src, "t.py")
+    assert diag.errors == []
+    assert "protected ref array<int> m_items;" in text
+    assert "protected ref map<string, int> m_table;" in text
 
 
 def test_lab_glue_matches_transpiled_signatures():

@@ -92,10 +92,12 @@ void lab_init(array<float> w1, array<float> b1, array<float> w2, array<float> b2
 array<float> lab_forward(array<float> x, array<float> w1, array<float> b1, array<float> w2, array<float> b2)
 {
     array<float> h = {  };
+    int wbase = 0;
+    float z = 0.0;
     for (int hi = 0; hi < 8; hi++)
     {
-        auto z = b1[hi];
-        auto wbase = hi * 4;
+        z = b1[hi];
+        wbase = hi * 4;
         for (int fi = 0; fi < 4; fi++)
         {
             z = z + (w1[wbase + fi] * x[fi]);
@@ -105,8 +107,8 @@ array<float> lab_forward(array<float> x, array<float> w1, array<float> b1, array
     array<float> z2 = {  };
     for (int ci = 0; ci < 4; ci++)
     {
-        auto z = b2[ci];
-        auto wbase = ci * 8;
+        z = b2[ci];
+        wbase = ci * 8;
         for (int hi = 0; hi < 8; hi++)
         {
             z = z + (w2[wbase + hi] * h[hi]);
@@ -121,10 +123,12 @@ float lab_train_step(array<float> x, array<float> y, array<float> w1, array<floa
 {
     array<float> z1 = {  };
     array<float> h1 = {  };
+    int wbase = 0;
+    float z = 0.0;
     for (int hi = 0; hi < 8; hi++)
     {
-        auto z = b1[hi];
-        auto wbase = hi * 4;
+        z = b1[hi];
+        wbase = hi * 4;
         for (int fi = 0; fi < 4; fi++)
         {
             z = z + (w1[wbase + fi] * x[fi]);
@@ -135,8 +139,8 @@ float lab_train_step(array<float> x, array<float> y, array<float> w1, array<floa
     array<float> z2 = {  };
     for (int ci = 0; ci < 4; ci++)
     {
-        auto z = b2[ci];
-        auto wbase = ci * 8;
+        z = b2[ci];
+        wbase = ci * 8;
         for (int hi = 0; hi < 8; hi++)
         {
             z = z + (w2[wbase + hi] * h1[hi]);
@@ -153,9 +157,10 @@ float lab_train_step(array<float> x, array<float> y, array<float> w1, array<floa
         loss = loss + (e * e);
     }
     array<float> dh = {  };
+    float g = 0.0;
     for (int hi = 0; hi < 8; hi++)
     {
-        auto g = 0.0;
+        g = 0.0;
         for (int ci = 0; ci < 4; ci++)
         {
             g = g + (w2[(ci * 8) + hi] * err[ci]);
@@ -165,7 +170,7 @@ float lab_train_step(array<float> x, array<float> y, array<float> w1, array<floa
     for (int ci = 0; ci < 4; ci++)
     {
         b2[ci] = b2[ci] - (lr * err[ci]);
-        auto wbase = ci * 8;
+        wbase = ci * 8;
         for (int hi = 0; hi < 8; hi++)
         {
             w2[wbase + hi] = w2[wbase + hi] - ((lr * err[ci]) * h1[hi]);
@@ -173,7 +178,7 @@ float lab_train_step(array<float> x, array<float> y, array<float> w1, array<floa
     }
     for (int hi = 0; hi < 8; hi++)
     {
-        auto g = dh[hi];
+        g = dh[hi];
         if (z1[hi] <= 0.0)
         {
             g = 0.0;
@@ -187,7 +192,7 @@ float lab_train_step(array<float> x, array<float> y, array<float> w1, array<floa
             g = -1.0;
         }
         b1[hi] = b1[hi] - (lr * g);
-        auto wbase = hi * 4;
+        wbase = hi * 4;
         for (int fi = 0; fi < 4; fi++)
         {
             w1[wbase + fi] = w1[wbase + fi] - ((lr * g) * x[fi]);
@@ -259,14 +264,15 @@ void lab_run()
         feat.Insert(dy / 100.0);
         feat.Insert(1.0);
         feat.Insert(0.0);
+        int best = 0;
         if (step < 200)
         {
-            auto best = lab_teacher(dx, dy);
+            best = lab_teacher(dx, dy);
         }
         else
         {
             auto probs = lab_forward(feat, w1, b1, w2, b2);
-            auto best = 0;
+            best = 0;
             auto bestp = probs[0];
             for (int ci = 1; ci < 4; ci++)
             {
