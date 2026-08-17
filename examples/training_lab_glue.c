@@ -175,8 +175,21 @@ class TrainingLabBase : ScriptComponent
 };
 
 // ============================================================
+// 组件配对类：EnforceScript 要求每个 ScriptComponent 子类配一个
+// XxxComponentClass（组件元数据类；引擎硬性要求，缺了报
+// "Missing Component Class"）。配对类继承树与组件继承树一致。
+// ============================================================
+class TrainingLabBaseClass : ScriptComponentClass
+{
+}
+
+// ============================================================
 // 变体 1：简单/脚本实体 —— SetOrigin 平移（43 文件惯例）
 // ============================================================
+class TrainingLabComponentClass : TrainingLabBaseClass
+{
+}
+
 class TrainingLabComponent : TrainingLabBase
 {
 	override void ApplyAction(int action)
@@ -201,6 +214,10 @@ class TrainingLabComponent : TrainingLabBase
 // 注意：车辆是物理仿真，不能 SetOrigin；通过转向/油门输入驱动。
 //       动作映射为：0/1 大幅转向，2 直行加速，3 倒车。
 // ============================================================
+class TrainingLabVehicleComponentClass : TrainingLabBaseClass
+{
+}
+
 class TrainingLabVehicleComponent : TrainingLabBase
 {
 	protected CarControllerComponent m_Controller;  // 组件字段不需要 ref（RSS 实证）

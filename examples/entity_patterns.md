@@ -7,7 +7,11 @@
 ## 1. 组件挂到实体上
 
 ```c
-class MyComponent : ScriptComponent          // 通用组件基类（GameLib/generated）
+class MyComponentClass : ScriptComponentClass   // ⚠️ 必须：每个组件配一个 XxxClass
+{
+}                                              // 组件元数据类（继承树镜像组件继承树）
+                                               // 缺失报 "Missing Component Class for 'XxxClass'"
+class MyComponent : ScriptComponent            // 通用组件基类（GameLib/generated）
 {
 	override void OnPostInit(IEntity owner)  // 206+ 文件的标准钩子
 	{
@@ -19,6 +23,8 @@ class MyComponent : ScriptComponent          // 通用组件基类（GameLib/gen
 	void Tick() { }
 }
 ```
+- **每个 `ScriptComponent` 子类必须配同名 `XxxClass : <父组件Class>`**（编译错误实证：
+  `Missing Component Class for 'TrainingLabBaseClass' for Component 'TrainingLabBase'`）。
 - 编辑器里把组件加到实体上即可；也可用 `modded class` 给某类实体全局附加行为。
 
 ## 2. 实体位置与移动
