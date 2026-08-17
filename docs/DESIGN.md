@@ -352,9 +352,12 @@ frontends/
 
 ## 12. 路线图
 
-- **v0.1（本次交付）**：Python 子集（§4 表格内全部"支持"项）；CLI；诊断；金样测试。
-- **v0.2**：推导式展开、模块级初始化 → `Init`、`@property`、回调/`ScriptCaller`、
-  VERIFY.md ⚠ 项实测修正、`--report json` CI 集成。
+- ✔ **v0.1（已完成）**：Python 子集（§4 表格内全部"支持"项）；CLI；诊断；金样测试；
+  语料校准（6568 个 `.c`）+ 真机验证（Workbench 编译/运行）全部定案；
+  **ML 展示**：前向数值对拍 8/8、反向传播训练器、游戏内现场学习（`training_lab`）；
+  **实体接入**：`training_lab_glue.c`（简单实体 + 真实车辆组件）、`entity_patterns.md`。
+- **v0.2**：推导式展开、模块级初始化 → `Init`、`@property`、回调/`ScriptInvoker`（已定案）、
+  列表字面量全面放开、静态字段/lazy-init、Adam 优化器、`--report json` CI 集成。
 - **v0.3**：tree-sitter 前端框架 + TypeScript/Java 前端；接口降级映射。
 - **v0.4**：双向（EnforceScript → Python）便于测试回环；增量/缓存（只重转变更文件）。
 
@@ -362,16 +365,16 @@ frontends/
 
 ## 13. 风险与已知限制
 
-1. **语义等价而非语法等价**：转换结果依赖 EnforceScript 的实际语义细节。已完成一轮真实语料
-   校准（`docs/VERIFY.md`，6568 个 `.c` 文件），大部分 ⚠ 项已定案；仅剩 int/int 除法、
-   `@property` 惯用法、显式基类构造、回调等少量项仍需 Workbench `ValidateScripts` 实测；
+1. **float32 精度**：EnforceScript `float` = 单精度（游戏内训练对拍定案：epoch-0 loss
+   0.504 ≈ float32 仿真 0.512，Python float64 为 0.653）→ 生成代码与 Python float64
+   参考只保证**近似**一致；ML 训练本就以 float32 为业界标准；
 2. **动态 Python 不可穷尽**：凡触及动态特性的代码必然需要人工改写——工具的价值在于
    把"能自动的部分"自动掉，把"不能的部分"精确暴露；
 3. **字段上提的误判**：`self.x` 仅在部分分支赋值时，EnforceScript 字段声明语义
    （默认值 0/null）可能与 Python 的 `AttributeError` 不同 → 生成告警，建议显式初始化；
 4. **性能**：`auto` 与数组/字典字面量展开可能产生非最优代码，后续可加优化 pass；
-5. **无测试环境时**：Workbench 校验不可用，金样只能保证"文本稳定"，不保证"编译通过"；
-   语料校准已显著降低该风险。
+5. **无测试环境时**：金样只能保证"文本稳定"，不保证"编译通过"——本仓库已通过真机
+   编译闭环（`verify/` 包 + 用户 Workbench）把该风险降到最低。
 
 ---
 
