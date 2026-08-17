@@ -70,3 +70,15 @@
 
 `tests/verify_workbench.py`：把"待确认"项生成最小 `.c` → 部署 addon → `ValidateScripts`，
 把编译结果回填本表，接入 CI。当前无 Workbench 环境时，以本语料报告为准。
+
+## 手工验证包（立即可用）
+
+`verify/` 目录已备好两个复制即用的包：
+
+- `verify/Any2EnforceVerify/` —— 预期全部编译通过，`VerifyEntry.Run()` 打印运行时自检
+  （int 除法、float 取模、字符串转义、浮点字面量、内联数组实参、Contains、基类隐式构造、
+  ScriptInvoker 回调）；
+- `verify/Any2EnforceProbes/` —— 逐个编译的语法探测（参数化基类构造、super 构造语法、
+  运算符重载、char 类型），预期部分失败，失败本身就是结论。
+
+使用与结果回填见 [`verify/README.md`](../verify/README.md)。
