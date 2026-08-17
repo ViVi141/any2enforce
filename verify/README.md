@@ -57,15 +57,15 @@ execCode VerifyEntry.Run()
 | V06 | `array.Contains` | `Any2EnforceVerify/V06_Contains.c` | true / false | ✅ true / false（`x in lst` 已实现） |
 | C01 | 基类默认构造隐式调用 | `Any2EnforceVerify/C01_BaseCtorImplicit.c` | 编译过→42（隐式调用成立） | ✅ **42（隐式调用定案）** |
 | C05 | ScriptInvoker 回调 | `Any2EnforceVerify/C05_ScriptInvoker.c` | 编译过→true | ✅ true |
-| P01 | 基类必选参数构造 | `Any2EnforceProbes/P01_BaseCtorRequiredArgs.c` | 预期编译失败（需显式调用） | ☐ |
-| P02 | 显式 super 构造语法 | `Any2EnforceProbes/P02_SuperCtorSyntax.c` | 候选 A/B/C 哪个能过 | ☐ |
-| P03 | 运算符重载 | `Any2EnforceProbes/P03_OpOverload.c` | 预期全部失败（语料 0 命中） | ☐ |
-| P04 | char 类型 | `Any2EnforceProbes/P04_CharType.c` | 预期全部失败（无 char） | ☐ |
-| P05 | 浮点指数写法 `1e30`/`1.0E30` | `Any2EnforceProbes/P05_FloatLiteralExponent.c` | 按报错行号定位 | ☐ |
-| P06 | `int = int / int` 合法性 | `Any2EnforceProbes/P06_IntDivToInt.c` | 编译过→输出 3/4；失败→需 (int) 强转 | ☐ |
-| P07 | float 直接 `%` | `Any2EnforceProbes/P07_FloatModulo.c` | 编译过→1.5（工具可简化） | ☐ |
-| P08 | 转义 `\u0041`/`\x41`/`\0` | `Any2EnforceProbes/P08_StringEscapes.c` | 按报错行号定位 | ☐ |
-| P09 | map.Contains / Get 回退 | `Any2EnforceProbes/P09_MapContains.c` | A 或 B 哪个编译过 | ☐ |
+| P01 | 基类必选参数构造 | `Any2EnforceProbes/P01_BaseCtorRequiredArgs.c` | 预期编译失败（需显式调用） | ✅ **定案：失败（`Overloaded function not compatible`）→ 必须显式调用** |
+| P02 | 显式 super 构造语法 | `Any2EnforceProbes/P02_SuperCtorSyntax.c` | 候选 A/B/C 哪个能过 | ☐ **取消注释候选逐个测** |
+| P03 | 运算符重载 | `Any2EnforceProbes/P03_OpOverload.c` | 预期全部失败（语料 0 命中） | ☐ **取消注释候选逐个测** |
+| P04 | char 类型 | `Any2EnforceProbes/P04_CharType.c` | 预期全部失败（无 char） | ☐ **取消注释候选逐个测** |
+| P05 | 浮点指数写法 `1e30`/`1.0E30` | `Any2EnforceProbes/P05_FloatLiteralExponent.c` | 按报错行号定位 | ✅ **定案：`1e30` 合法；`1.0E30`（大写 E）非法** |
+| P06 | `int = int / int` 合法性 | `Any2EnforceProbes/P06_IntDivToInt.c` | 编译过→输出 3/4；失败→需 (int) 强转 | ✅ **可编译**；值（3 或 4）待运行 `P06_IntDivToInt.Check()` |
+| P07 | float 直接 `%` | `Any2EnforceProbes/P07_FloatModulo.c` | 编译过→1.5（工具可简化） | ✅ **定案：非法（`Unknown operator '%'`）→ 必须 `Math.Mod`** |
+| P08 | 转义 `\u0041`/`\x41`/`\0` | `Any2EnforceProbes/P08_StringEscapes.c` | 按报错行号定位 | ✅ **定案：全部合法** |
+| P09 | map.Contains / Get 回退 | `Any2EnforceProbes/P09_MapContains.c` | A 或 B 哪个编译过 | ☐ **取消注释候选 A 再测** |
 
 > 判定标准：**编译通过 + 输出符合预期 = 定案**；编译失败的行在文件头注释里已说明含义。
 > 任何"预期失败却编译通过"都是重要发现，请务必记录。

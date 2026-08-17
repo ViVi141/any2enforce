@@ -488,6 +488,30 @@ class PythonFrontend:
                 [self._expr(c) for c in node.comparators], span=span)
 
         if isinstance(node, ast.Call):
+            # super() / super().method(...): base-call syntax is pending
+            # verification (P02). Base default ctor is implicitly called
+            # (verified C01), but a base with required-arg ctor needs an
+            # explicit call, whose EnforceScript syntax is still undecided.
+            if isinstance(node.func, ast.Name) and node.func.id == "super":
+                self.diag.error(
+                    "unsupported-super",
+                    "super() is not mapped in v0.1",
+                    span,
+                    note="base default ctor is called implicitly (verified); "
+                         "explicit base-call syntax pending probe P02",
+                )
+                return UnsupportedExpr("super() call", span=span)
+            if isinstance(node.func, ast.Attribute) \
+                    and isinstance(node.func.value, ast.Name) \
+                    and node.func.value.id == "super":
+                self.diag.error(
+                    "unsupported-super",
+                    f"super().{node.func.attr}() is not mapped in v0.1",
+                    span,
+                    note="base default ctor is called implicitly (verified); "
+                         "explicit base-call syntax pending probe P02",
+                )
+                return UnsupportedExpr("super() call", span=span)
             func = self._expr(node.func)
             args = [self._expr(a) for a in node.args]
             kwargs = []
