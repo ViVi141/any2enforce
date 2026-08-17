@@ -1,21 +1,22 @@
 // ============================================================
-// TrainingLabGlue.c — 把训练实验室接到真实实体上
+// TrainingLabGlue.c — 把训练实验室接到真实实体上（v2：真实实体模式版）
 //
 // 依赖：training_lab.c（any2enforce 生成）的全局函数：
 //   lab_init / lab_forward / lab_train_step / lab_teacher
 //
-// 用法（WorldEditor）：
-//   1) 场景放两个实体：学员实体（挂本组件）+ 目标实体；
-//   2) 组件属性 m_Target 选目标实体（或把目标实体命名为 "LabTarget"，
-//      在 OnPostInit 里按名字自动查找）；
-//   3) 运行任务 → 学员实体会被"正在学习"的模型驱动去追目标，
-//      控制台每 10 个 tick 打印 loss / 准确率 / 追击误差。
+// 实体模式学自 ANNA（车辆驱动）与 Realistic-Stamina-System（组件惯例），
+// 详见 examples/entity_patterns.md。两个变体：
+//   TrainingLabComponent         — 简单/脚本实体：SetOrigin 平移
+//   TrainingLabVehicleComponent  — 车辆实体：注入转向/油门（ANNA 模式）
 //
-// 设计：这是"接真实世界"的最小壳 —— 特征/标签/训练/决策全部复用已转好的
-// lab_* 函数，本文件只做三件事：取实体位置、喂数据、驱动实体。
-// 替换目标/载具时，只改 Tick() 里取位置和移动实体的两处。
+// 用法（WorldEditor）：
+//   1) 场景放两个实体：学员实体（挂上面任一组件）+ 目标实体；
+//   2) 组件属性 m_Target 选目标（或命名目标实体为 "LabTarget" 自动查找）；
+//   3) 运行任务 → 学员实体被"正在学习"的模型驱动去追目标，
+//      控制台每 10 个 tick 打印 loss / 准确率 / 追击误差。
 // ============================================================
-class TrainingLabComponent : ScriptComponent
+
+class TrainingLabBase : ScriptComponent
 {
 	[Attribute("", UIWidgets.Object)]
 	protected IEntity m_Target;
@@ -24,7 +25,7 @@ class TrainingLabComponent : ScriptComponent
 	protected float m_fTick;
 
 	// 训练缓冲（布局与 training_lab.py 一致：每样本 4 特征 + 4 维 one-hot + 类别）
-	// 注意：array/map/set 字段必须 ref（EnforceScript 强引用要求）
+	// array/map/set 字段必须 ref（编译错误实证；ANNA: protected static ref array<float>）
 	protected ref array<float> m_aBufX = {};
 	protected ref array<float> m_aBufY = {};
 	protected ref array<int> m_aLabels = {};
@@ -68,19 +69,8 @@ class TrainingLabComponent : ScriptComponent
 		else
 			action = ArgMax(lab_forward(feat, m_W1, m_B1, m_W2, m_B2));
 
-		// 3) 驱动实体：教学壳直接 SetOrigin 平移（换车辆/角色请用其移动 API）
-		//    动作：0=-X, 1=+X, 2=-Z, 3=+Z
-		float nx = ownPos[0];
-		float nz = ownPos[2];
-		if (action == 0)
-			nx = nx - 2.0;
-		else if (action == 1)
-			nx = nx + 2.0;
-		else if (action == 2)
-			nz = nz - 2.0;
-		else
-			nz = nz + 2.0;
-		m_Entity.SetOrigin(Vector(nx, ownPos[1], nz));
+		// 3) 驱动实体（子类覆写 ApplyAction：简单实体平移 / 车辆注入输入）
+		ApplyAction(action);
 
 		// 4) 采样入缓冲（teacher 标签基于当前相对位置）
 		AppendSample(feat, lab_teacher(dx, dy));
@@ -92,6 +82,12 @@ class TrainingLabComponent : ScriptComponent
 			TrainBurst();
 			PrintTelemetry(dx, dy);
 		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	void ApplyAction(int action)
+	{
+		// 由子类覆写：动作 0=-X, 1=+X, 2=-Z, 3=+Z
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -175,5 +171,66 @@ class TrainingLabComponent : ScriptComponent
 			}
 		}
 		return best;
+	}
+};
+
+// ============================================================
+// 变体 1：简单/脚本实体 —— SetOrigin 平移（43 文件惯例）
+// ============================================================
+class TrainingLabComponent : TrainingLabBase
+{
+	override void ApplyAction(int action)
+	{
+		vector ownPos = m_Entity.GetOrigin();
+		float nx = ownPos[0];
+		float nz = ownPos[2];
+		if (action == 0)
+			nx = nx - 2.0;
+		else if (action == 1)
+			nx = nx + 2.0;
+		else if (action == 2)
+			nz = nz - 2.0;
+		else
+			nz = nz + 2.0;
+		m_Entity.SetOrigin(Vector(nx, ownPos[1], nz));
+	}
+};
+
+// ============================================================
+// 变体 2：车辆实体 —— 注入驾驶输入（ANNA ApplyManeuverInputs 模式）
+// 注意：车辆是物理仿真，不能 SetOrigin；通过转向/油门输入驱动。
+//       动作映射为：0/1 大幅转向，2 直行加速，3 倒车。
+// ============================================================
+class TrainingLabVehicleComponent : TrainingLabBase
+{
+	protected CarControllerComponent m_Controller;  // 组件字段不需要 ref（RSS 实证）
+
+	override void OnPostInit(IEntity owner)
+	{
+		super.OnPostInit(owner);
+		m_Controller = CarControllerComponent.Cast(
+			m_Entity.FindComponent(CarControllerComponent));
+	}
+
+	override void ApplyAction(int action)
+	{
+		if (!m_Controller)
+			return;
+
+		VehicleWheeledSimulation sim = m_Controller.GetSimulation();
+		if (!sim.EngineIsOn())
+			sim.EngineStart();
+
+		float steer = 0;
+		float throttle = 0.6;
+		if (action == 0)
+			steer = -1.0;
+		else if (action == 1)
+			steer = 1.0;
+		else if (action == 3)
+			throttle = -0.4;
+
+		sim.SetSteering(steer);   // 引擎 API：SetSteering（不是 SetSteer）
+		sim.SetThrottle(throttle);
 	}
 };
