@@ -28,5 +28,13 @@ def names() -> list[str]:
     return result
 
 
+def is_member(values: list[int], probe: int) -> bool:
+    return probe in values
+
+
+def not_member(values: list[int], probe: int) -> bool:
+    return probe not in values
+
+
 def wrap(deg: float) -> float:
     return deg % 360.0

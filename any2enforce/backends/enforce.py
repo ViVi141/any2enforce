@@ -410,6 +410,26 @@ class EnforceBackend:
                             e.span,
                         )
                         parts.append(f"{self._p(left)} != {r}")
+                elif op in ("in", "not in"):
+                    # verified: array.Contains / string.Contains (runtime V06)
+                    container = right
+                    t = self._expr_type(container)
+                    if isinstance(t, MapType):
+                        self.diag.error(
+                            "in-map",
+                            "`x in map` is not mapped yet (map.Contains pending "
+                            "verification P09); use `k in m` only after confirm",
+                            e.span,
+                        )
+                    elif t is None:
+                        self.diag.warning(
+                            "in-type",
+                            "membership test on unknown type; emitted as "
+                            ".Contains() (verify it exists on the type)",
+                            e.span,
+                        )
+                    contained = f"{self._p(container)}.Contains({self._p(left)})"
+                    parts.append(f"!{contained}" if op == "not in" else contained)
                 else:
                     parts.append(f"{self._p(left)} {op} {r}")
                 left = right
@@ -504,7 +524,15 @@ class EnforceBackend:
                 e.span,
                 note="pass arguments positionally",
             )
-        args = [self._expr(a) for a in e.args]
+        args: List[str] = []
+        for a in e.args:
+            if isinstance(a, ListExpr):
+                # verified: inline array literal as call argument (V05:
+                # `Sum({1, 2, 3})` compiles and returns 6)
+                items = ", ".join(self._expr(i) for i in a.items)
+                args.append(f"{{ {items} }}")
+            else:
+                args.append(self._expr(a))
         if isinstance(e.func, NameExpr):
             name = e.func.name
             if name == "print":

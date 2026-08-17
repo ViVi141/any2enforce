@@ -27,6 +27,7 @@ _BIN_OPS = {
 _CMP_OPS = {
     ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
     ast.Gt: ">", ast.GtE: ">=", ast.Is: "is", ast.IsNot: "is not",
+    ast.In: "in", ast.NotIn: "not in",
 }
 
 # (ast node type, feature name)

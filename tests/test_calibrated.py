@@ -69,3 +69,28 @@ def test_print_variants():
                            "    print(\"x\", b)\n", "t.py")
     assert "Print(a);" in text
     assert 'PrintFormat("%1 %2", "x", b);' in text
+
+
+def test_membership_in_lowered_to_contains():
+    src = ("def f(values: list[int], probe: int) -> bool:\n"
+           "    return probe in values\n")
+    _, text, diag = transpile(src, "t.py")
+    assert diag.errors == []
+    assert "return values.Contains(probe);" in text
+
+
+def test_not_in_lowered_to_negated_contains():
+    src = ("def f(values: list[int], probe: int) -> bool:\n"
+           "    return probe not in values\n")
+    _, text, _ = transpile(src, "t.py")
+    assert "return !values.Contains(probe);" in text
+
+
+def test_inline_array_literal_as_call_argument():
+    src = ("def total(xs: list[int]) -> int:\n"
+           "    return xs[0]\n"
+           "def f() -> None:\n"
+           "    print(total([1, 2, 3]))\n")
+    _, text, diag = transpile(src, "t.py")
+    assert diag.errors == []
+    assert "Print(total({ 1, 2, 3 }));" in text

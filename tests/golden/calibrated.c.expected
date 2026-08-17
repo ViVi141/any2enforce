@@ -44,6 +44,16 @@ array<string> names()
     return result;
 }
 
+bool is_member(array<int> values, int probe)
+{
+    return values.Contains(probe);
+}
+
+bool not_member(array<int> values, int probe)
+{
+    return !values.Contains(probe);
+}
+
 float wrap(float deg)
 {
     return Math.Mod(deg, 360.0);

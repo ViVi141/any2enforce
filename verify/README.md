@@ -49,14 +49,14 @@ execCode VerifyEntry.Run()
 
 | ID | 验证内容 | 文件 | 预期 | 结果 |
 |---|---|---|---|---|
-| V01 | int/int → float 除法值 | `Any2EnforceVerify/V01_IntDivision.c` | `7/2`→3.5（float 除法）或 3 | ☐ |
-| V02 | Math.Mod float 取模 | `Any2EnforceVerify/V02_FloatModulo.c` | 输出 1.5 | ☐ |
-| V03 | 字符串转义 `\t`/`\n`（确定项） | `Any2EnforceVerify/V03_StringEscapes.c` | 合法 | ☐ |
-| V04 | 浮点字面量 `1e+30`/`1.0e30`/`0.5` | `Any2EnforceVerify/V04_FloatLiterals.c` | 已定案：合法 | ☐ |
-| V05 | 内联数组实参 `{...}` | `Any2EnforceVerify/V05_InlineArrayArg.c` | 编译通过→6（v0.2 放开列表实参） | ☐ |
-| V06 | `array.Contains` | `Any2EnforceVerify/V06_Contains.c` | true / false | ☐ |
-| C01 | 基类默认构造隐式调用 | `Any2EnforceVerify/C01_BaseCtorImplicit.c` | 编译过→42（隐式调用成立） | ☐ |
-| C05 | ScriptInvoker 回调 | `Any2EnforceVerify/C05_ScriptInvoker.c` | 编译过→true | ☐ |
+| V01 | int/int → float 除法值 | `Any2EnforceVerify/V01_IntDivision.c` | `7/2`→3.5（float 除法）或 3 | ✅ **3.5（`/` 是 float 除法）**；Math.Floor→3 |
+| V02 | Math.Mod float 取模 | `Any2EnforceVerify/V02_FloatModulo.c` | 输出 1.5 | ✅ 1.5 |
+| V03 | 字符串转义 `\t`/`\n`（确定项） | `Any2EnforceVerify/V03_StringEscapes.c` | 合法 | ✅ 合法 |
+| V04 | 浮点字面量 `1e+30`/`1.0e30`/`0.5` | `Any2EnforceVerify/V04_FloatLiterals.c` | 已定案：合法 | ✅ `1e+30`/`1.0e30`→1e+30；`0.5`→0.5 |
+| V05 | 内联数组实参 `{...}` | `Any2EnforceVerify/V05_InlineArrayArg.c` | 编译通过→6（v0.2 放开列表实参） | ✅ 6（已实现实参位置） |
+| V06 | `array.Contains` | `Any2EnforceVerify/V06_Contains.c` | true / false | ✅ true / false（`x in lst` 已实现） |
+| C01 | 基类默认构造隐式调用 | `Any2EnforceVerify/C01_BaseCtorImplicit.c` | 编译过→42（隐式调用成立） | ✅ **42（隐式调用定案）** |
+| C05 | ScriptInvoker 回调 | `Any2EnforceVerify/C05_ScriptInvoker.c` | 编译过→true | ✅ true |
 | P01 | 基类必选参数构造 | `Any2EnforceProbes/P01_BaseCtorRequiredArgs.c` | 预期编译失败（需显式调用） | ☐ |
 | P02 | 显式 super 构造语法 | `Any2EnforceProbes/P02_SuperCtorSyntax.c` | 候选 A/B/C 哪个能过 | ☐ |
 | P03 | 运算符重载 | `Any2EnforceProbes/P03_OpOverload.c` | 预期全部失败（语料 0 命中） | ☐ |
