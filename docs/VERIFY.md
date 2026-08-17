@@ -52,9 +52,10 @@
 | 6 | int/int 除法结果类型 | ✅ `/` 是 float 除法（`7 / 2 == 3.5`）；**`int i = 7 / 2` 可编译**（P06 无报错，隐式转换合法；值为 3 还是 4 待运行确认）；`//` → `Math.Floor(a / b)` 语义正确（含负数 floor 语义） |
 | 13b | 显式基类构造调用 | ✅ **无显式语法，参数隐式转发**：基类默认构造 → 隐式调用（C01=42）；基类构造带必选参数 → 派生构造必须声明同名参数（P01/P02 报 `Overloaded function not compatible`；语料 `SCR_WorldTimerEntry(string name, World world) : SCR_TimerEntryBase(string name)`）；派生不写构造也可编译（`SCR_RealTimerEntry` 先例）。工具已实现 `ctor-forward` 检查 + `super().__init__` 丢弃 + `super().method`→`super.Method` |
 | 14 | 属性惯用法 | ☐ 引擎无 property，`@property` v0.1 报错，v0.2 生成 `GetX/SetX` |
-| 15 | 运算符重载 | ☐ 待 P03 候选（语料 0 命中，预期不支持） |
+| 15 | 运算符重载 | ✅ **不支持**：`operator+` 语法非法（`Expected '(' not a '+'`）；`opAdd`/`opEquals` 仅作为普通方法名编译（引擎是否接线到 `+` 无证据，语料 0 用法）→ 按不支持处理 |
 | 16 | 回调/函数指针 | ✅ **ScriptInvoker 可用**（Insert + Invoke，C05=true）；`ScriptCaller` 不存在 |
 | 21 | 字符串转义 | ✅ `\t`/`\n`/`\u0041`/`\x41`/`\0` **全部合法**（P08 无报错） |
+| 22b | char 类型 | ✅ **不存在**（P04：声明与参数均报 `Unknown type 'char'`）；字符串 `s[0]` 下标可编译（返回 string） |
 | 24 | 浮点科学计数字面量 | ✅ **小写 `e` 全合法**（`1e+30`/`1.0e30`/`1e30`）；**大写 `E` 非法**（`1E30`、`1.0E30`）；repr 输出（恒小写 e）安全 |
 
 ## 运行时已定案（Any2EnforceVerify 实测，2024-06）
