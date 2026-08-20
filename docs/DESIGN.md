@@ -358,6 +358,17 @@ frontends/
   ML 展示（前向/训练器/游戏内现场学习）与实体接入已拆分为独立仓库
   `reforger-ml-lab`（含 `training_lab`、`training_lab_glue.c`、`entity_patterns.md`）。
 - ✔ **v0.2（部分）**：list/dict/set 推导式展开（赋值/return）。
+- ✔ **v0.2（bundle 阶段 A）**：依赖库 + Python 整体编译 —— import 图自动发现
+  （`any2enforce/bundle/resolver.py`：传递闭包、拓扑排序、环检测、relative/as 别名、
+  `__init__.py` 包规则）、每模块 `ns_prefix` 消歧、`transpile_bundle()` 单 `.c` 发射、
+  CLI `--bundle ENTRY --include DIR`、`examples/bundledemo/` 示例、
+  真实 Workbench 验证全 PASS（`New Enfusion Project/scripts/Game/BundleVerify/`，11/11）。
+  **边界**：Stage B（跨模块符号重连，`main` 里运行时调用依赖的 `vecmath.xxx` → 目前发射
+  未定义的裸引用）未实现，详见下方 §14。
+- ✔ **v0.2（numpy 轨道 — 设计 + 原型）**：`docs/NUMPY.md`（np 子集内置 EnforceScript
+  数值层设计）+ `verify/numpy_probe.py`（float32 模拟器 vs 真实 numpy 2.4.4 数值对拍 12/12
+  PASS，量化 float32/float64 漂移）。numpy mapper（`frontends/numpy_mapper.py`）属后续阶段，
+  未落主代码。
 - **v0.2 其余**：模块级初始化 → `Init`、`@property`、回调/`ScriptInvoker`（已定案）、
   列表字面量全面放开、静态字段/lazy-init、Adam 优化器、`--report json` CI 集成。
 - **v0.3**：tree-sitter 前端框架 + TypeScript/Java 前端；接口降级映射。
@@ -377,6 +388,39 @@ frontends/
 4. **性能**：`auto` 与数组/字典字面量展开可能产生非最优代码，后续可加优化 pass；
 5. **无测试环境时**：金样只能保证"文本稳定"，不保证"编译通过"——本仓库已通过真机
    编译闭环（`verify/` 包 + 用户 Workbench）把该风险降到最低。
+
+---
+
+## 14. 依赖捆绑（bundle）— 阶段 A 边界
+
+> 目标：把「依赖库 + Python 代码」作为一个整体编译成 EnforceScript（库 + 业务一起）。
+
+**已实现（Stage A — 物理合并 + 每模块前缀）**：
+- `any2enforce/bundle/resolver.py`：从入口沿 `import`/`from ... import`（含相对 `.`、
+  `as` 别名、`pkg/__init__.py`）做**传递闭包**，DFS 三色拓扑排序（依赖先于使用者），
+  import 环 → `bundle-cycle` 诊断、无法解析 → `bundle-unresolved-import` 诊断。
+- `Module.ns_prefix`（如 `a.b.c` → `a_b_c_`）加在每个模块的全局函数名上，防扁平
+  命名空间冲突；`ir.py`/`frontends`/`backends`/`cli` 相应扩展。
+- `transpile_bundle(entry, include_roots, ...)` 产出单个合并 `.c`；CLI `--bundle`/
+  `--include`。单文件 `transpile()` 路径保持逐字节稳定（金样未变）。
+- 真实 Workbench 验证：`New Enfusion Project/scripts/Game/BundleVerify/`，
+  ValidateScripts 0 错误、运行 11/11 `[BUNDLE] PASS`。
+
+**Stage B（未实现，关键边界）**：**跨模块符号重连**。当前产物里入口函数若在运行时
+调用依赖模块的函数（如 `vecmath.magnitude(v)`），会发射**未定义的 `vecmath.magnitude`**
+裸引用 → EnforceScript 编译失败。因此自检用例目前直接驱动依赖库自身的独立全局函数
+（`lib_vecmath_*`），而非让入口内部调用跨模块函数。Stage B 需：
+1. 调用改写：`vecmath.magnitude(x)` → `lib_vecmath_magnitude(x)`；
+2. `from x import y` 展开：裸名 `helper(x)` → 前缀名；
+3. 跨模块类/`ref` 泛型/继承的改名同步；类名冲突检测；
+4. `__init__.py` 再导出；内置模块 vs 用户模块的导入区分（内置不报 unresolved）。
+
+**Stage C（未实现）**：按调用边 tree-shaking（保守保留类全部方法）、库对 `os/sys/I-O`
+等引擎外假定的三档分流（可映射/需实现接口/报错）、库入口 `Init`/`ScriptComponent` 壳。
+
+**numpy 独立轨道**：见 `docs/NUMPY.md`。结论：真实 numpy（C 扩展）无法转换；改以内置
+np 子集映射器替代（`array<float>` + `Math.*`）。已交付设计 + `verify/numpy_probe.py`
+数值可行性证明（float32 对拍 12/12 PASS）；numpy mapper 属后续阶段。
 
 ---
 

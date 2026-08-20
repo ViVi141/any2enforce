@@ -84,6 +84,31 @@
 - `NULL` 只见于引擎 proto 签名默认值；业务代码一律小写 `null`。
 - 模块级可执行代码不存在 —— Reforger 全靠类/组件/实体驱动（印证 v0.1"只输出函数与类"的取舍）。
 
+## bundle 真实 Workbench 验证（BundleVerify，2026-08）
+
+> 验证**依赖库 + Python 整体编译**（bundle）产物在真实 Workbench 编译 + 运行 + 数值对拍。
+> 用例：`New Enfusion Project/scripts/Game/BundleVerify/`（`bundle_demo.c` = 真实 CLI 生成的
+> 产物；`BundleVerify.c` = 自检）；受试产物源码 `examples/bundledemo/`（依赖库 `lib/vecmath.py`
+> + 入口 `main.py`，`from lib import vecmath`）。
+
+**ValidateScripts：0 错误。** 运行输出 11/11 `[BUNDLE] PASS`：
+
+| tag | 计算 | 期望 | 结果 |
+|---|---|---|---|
+| `dot[1,2,3,4].[4,5,6,7]` | 1·4+…+4·7 | 60 | ✅ 60 |
+| `magnitude[3,4]` | 9+16 | 25 | ✅ 25 |
+| `magnitude[1,2,2,4]` | 1+4+4+16 | 25 | ✅ 25 |
+| `mean[2,4,6,8]` | 20/4（`/` float 除法） | 5 | ✅ 5 |
+| `mean[]` | 空数组护栏 | 0 | ✅ 0 |
+| `weighted_sum.center` | map 命中 | 1.0 | ✅ |
+| `weighted_sum.missing->fallback` | 未命中回退 | 7.0 | ✅ |
+| `weights.border/.center/.corner` | 入口构造的 map | 0.5/1.0/0.25 | ✅ |
+| `weights.has3keys` | `map.Contains` 三键 | 1 | ✅ |
+
+**定案**：bundle 产物的数组/规约/map `Contains`/`[]`/回退/`Math.AbsFloat` 等映射在真实运行时正确。
+**边界（如实）**：跨模块符号重连（Stage B）未实现 —— 入口函数不得在运行时调用依赖模块函数；
+自检驱动依赖库自身独立全局函数（`lib_vecmath_*`）。详见 `docs/DESIGN.md` §14。
+
 ## 自动化校验（规划）
 
 `tests/verify_workbench.py`：把"待确认"项生成最小 `.c` → 部署 addon → `ValidateScripts`，

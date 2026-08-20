@@ -352,6 +352,7 @@ class PassStmt(Stmt):
 class ImportStmt(Stmt):
     module: str
     names: List[str] = field(default_factory=list)
+    level: int = 0  # relative import level: 0 = absolute, 1+ = from . / from ..
 
 
 @dataclass
@@ -418,9 +419,10 @@ class FunctionDef(Node):
 
 @dataclass
 class Module(Node):
-    name: str  # source stem
+    name: str  # source stem (or qualified name for bundled modules)
     doc: Optional[str] = None
     imports: List[ImportStmt] = field(default_factory=list)
     functions: List[FunctionDef] = field(default_factory=list)
     classes: List[ClassDef] = field(default_factory=list)
     globals: List[Stmt] = field(default_factory=list)  # module-level executable stmts (v0.1: markers only)
+    ns_prefix: str = ""  # per-module namespace prefix for bundle (e.g. "a_b_c_")

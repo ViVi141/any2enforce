@@ -417,9 +417,14 @@ class PythonFrontend:
             return ImportStmt(node.names[0].name,
                               [a.asname or a.name for a in node.names],
                               span=self._span(node))
-        module = node.module or ""
-        return ImportStmt(module,
+        level = getattr(node, "level", 0) or 0
+        mod: str = node.module or ""
+        # Prefix dots for relative imports so we can reconstruct level+module
+        if level > 0:
+            mod = "." * level + mod
+        return ImportStmt(mod,
                           [a.asname or a.name for a in node.names],
+                          level=level,
                           span=self._span(node))
 
     def _target(self, node: ast.expr) -> Optional[Expr]:

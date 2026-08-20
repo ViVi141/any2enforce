@@ -20,11 +20,14 @@ ML 端到端证明（游戏内神经网络现场学习）见独立仓库 [reforg
 
 ```bash
 pip install -e .          # Python >= 3.11，零第三方依赖
-python -m pytest -q       # 61 个测试
+python -m pytest -q       # 71 个测试
 
 # 转换
 any2enforce examples/demo.py --out build/demo.c
 any2enforce examples/training_lab.py --out build/training_lab.c --prefix LAB_
+
+# 捆绑：依赖库 + Python 一起编译成单个 .c（import 图自动发现）
+any2enforce --bundle examples/bundledemo/main.py --include examples/bundledemo --out build/demo_bundle.c
 
 # CI：有 error 诊断即非零退出
 any2enforce src/ --out build/ --fail-on-error
@@ -102,17 +105,21 @@ Python 源码 → PythonFrontend（stdlib ast）→ IR → Analyzer（类型解�
 
 ```
 any2enforce/
-  docs/DESIGN.md        # 完整设计（架构/映射表/路线图）
-  docs/VERIFY.md        # 语料实测 + 真机验证报告（⚠ 清零）
+  docs/DESIGN.md        # 完整设计（架构/映射表/路线图/§14 bundle 边界）
+  docs/VERIFY.md        # 语料实测 + 真机验证报告（含 bundle 真机验证）
+  docs/NUMPY.md         # numpy 子集内置 EnforceScript 数值层设计（+原型已对拍 PASS）
   verify/               # 复制即用的验证包（Any2EnforceVerify + Any2EnforceProbes）
+                        #   verify/numpy_probe.py：float32 模拟器 vs 真实 numpy 对拍
   examples/             # 示例画廊（含 3 个 ML POC + 实体壳 + 实体模式文档）
+  examples/bundledemo/  # bundle 示例（依赖库 lib/vecmath.py + 入口 main.py）
   any2enforce/
+    bundle/resolver.py             # import 图自动发现（传递闭包/拓扑/环检测）
     frontends/python_frontend.py   # ast → IR
     sema/analyze.py + types.py     # 类型解析、字段上提、作用域 env
     backends/enforce.py            # IR → EnforceScript（作用域栈、上提、ref 字段）
     validate/workbench.py          # ValidateScripts 校验闭环（可选）
-    cli.py                         # CLI（--prefix / --naming / --fail-on-error）
-  tests/                  # 61 个测试（金样 + 负向 + 校准 + 推导式 + 一致性）
+    cli.py                         # CLI（--prefix / --naming / --fail-on-error / --bundle）
+  tests/                  # 71 个测试（金样 + 负向 + 校准 + 推导式 + bundle + 一致性）
 ```
 
 ---
@@ -134,6 +141,11 @@ python -m pytest -q
 - ✔ **v0.1**：Python 子集、CLI、诊断、金样；语料校准 + 真机验证全部定案；
   三个 ML POC（前向/训练/现场学习）+ 真实实体壳 + 实体模式文档。
 - ✔ **v0.2（进行中）**：list/dict/set 推导式自动展开（赋值/return）。
+- ✔ **v0.2（bundle 阶段 A）**：依赖库 + Python 整体编译 —— import 图自动发现、每模块前缀、
+  `transpile_bundle()`、CLI `--bundle`；真实 Workbench 验证全 PASS。Stage B（跨模块符号重连）
+  待实现，见 `docs/DESIGN.md` §14。
+- ✔ **v0.2（numpy 轨道 — 设计 + 原型）**：`docs/NUMPY.md` + `verify/numpy_probe.py`
+  （float32 对拍 12/12 PASS）；numpy mapper 属后续阶段。
 - **v0.2 其余**：`@property` → `GetX/SetX`、模块级初始化 → `Init()`、
   列表字面量全面放开、Adam 优化器、`--report json` CI 集成、静态字段/lazy-init。
 - **v0.3**：tree-sitter 前端框架 + TypeScript/Java 前端。

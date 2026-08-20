@@ -1,0 +1,1 @@
+"""Bundle: dependency-resolution + merged emit for multi-file Python projects."""
