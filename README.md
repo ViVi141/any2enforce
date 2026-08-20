@@ -161,3 +161,12 @@ python -m pytest -q
 3. 字段上提对"仅在部分分支赋值"的字段按类型默认值声明，与 Python 的 `AttributeError`
    语义不同 → 会告警；
 4. 无 Workbench 环境时金样只保证文本稳定；`--validate` 可接入真机编译闭环。
+
+---
+
+## 许可证
+
+本仓库以 [MIT License](LICENSE) 发布。
+
+- 许可范围是本工具的源代码与文档，**不**授予 Bohemia Interactive 的 Enfusion / Arma Reforger 引擎、官方脚本或商标任何权利。
+- 你提供的输入、以及 any2enforce **生成的 EnforceScript**，版权仍归你（或你的上游）；工具许可证不自动套到生成物上。

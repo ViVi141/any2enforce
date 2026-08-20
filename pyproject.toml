@@ -8,8 +8,11 @@ version = "0.1.0"
 description = "Translate common programming languages (Python first) to EnforceScript (Arma Reforger / Enfusion)"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [{ name = "any2enforce" }]
+license = { file = "LICENSE" }
+authors = [{ name = "ViVi141" }]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+]
 
 [project.scripts]
 any2enforce = "any2enforce.cli:main"
