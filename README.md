@@ -20,7 +20,7 @@ ML 端到端证明（游戏内神经网络现场学习）见独立仓库 [reforg
 
 ```bash
 pip install -e .          # Python >= 3.11，零第三方依赖
-python -m pytest -q       # 54 个测试
+python -m pytest -q       # 61 个测试
 
 # 转换
 any2enforce examples/demo.py --out build/demo.c
@@ -87,14 +87,14 @@ Python 源码 → PythonFrontend（stdlib ast）→ IR → Analyzer（类型解�
 | 模块级函数、类（单继承）、静态方法 | `__init__` → 构造函数；`self.x = v` → 字段上提（`m_` 前缀，裸访问）；基类构造参数隐式转发 |
 | 类型注解 | `int/float/bool/str`、`list[T]→array<T>`、`dict[K,V]→map<K,V>`、`set[T]→set<T>`、`Optional`、用户类（自动 `ref`） |
 | 控制流 | `if/elif/else`、`while`、`for i in range(...)`（含负步进）、`for x in list → foreach`、三元 → if/else 展开、块作用域变量自动上提 |
-| 表达式 | 算术/比较/逻辑、`f"..."`/`%` → `string.Format`、`len()`、`print→Print/PrintFormat`、`min/max/abs` 类型分派、列表/字典字面量、map `[]` 读写、`x in c → c.Contains(x)`、内联数组实参 |
+| 表达式 | 算术/比较/逻辑、`f"..."`/`%` → `string.Format`、`len()`、`print→Print/PrintFormat`、`min/max/abs` 类型分派、列表/字典字面量、map `[]` 读写、`x in c → c.Contains(x)`、内联数组实参、**list/dict/set 推导式**（赋值/return 展开；嵌套表达式自动提升为临时变量） |
 | 其他 | 默认参数、`list.append→Insert`、`super().method→super.Method`、`--prefix` 全局函数前缀 |
 
 | 不支持（v0.1，报错并留标记） | 说明 |
 |---|---|
 | `try/except`、`with`、`global/nonlocal`、`del`、`raise`、生成器 `yield` | 建议改写为返回值/错误码模式 |
 | `lambda`/闭包、嵌套函数 | 后续用 `ScriptInvoker` 回调（已定案可用） |
-| `*args`/`**kwargs`、关键字实参、推导式、`tuple`、多继承、`@property`、装饰器 | 手动展开或等 v0.2 |
+| `*args`/`**kwargs`、关键字实参、`tuple`、多继承、`@property`、装饰器 | 手动展开或等后续版本 |
 
 ---
 
@@ -112,7 +112,7 @@ any2enforce/
     backends/enforce.py            # IR → EnforceScript（作用域栈、上提、ref 字段）
     validate/workbench.py          # ValidateScripts 校验闭环（可选）
     cli.py                         # CLI（--prefix / --naming / --fail-on-error）
-  tests/                  # 54 个测试（金样 + 负向 + 校准 + ML round-trip + 一致性）
+  tests/                  # 61 个测试（金样 + 负向 + 校准 + 推导式 + 一致性）
 ```
 
 ---
@@ -133,7 +133,8 @@ python -m pytest -q
 
 - ✔ **v0.1**：Python 子集、CLI、诊断、金样；语料校准 + 真机验证全部定案；
   三个 ML POC（前向/训练/现场学习）+ 真实实体壳 + 实体模式文档。
-- **v0.2**：推导式自动展开、`@property` → `GetX/SetX`、模块级初始化 → `Init()`、
+- ✔ **v0.2（进行中）**：list/dict/set 推导式自动展开（赋值/return）。
+- **v0.2 其余**：`@property` → `GetX/SetX`、模块级初始化 → `Init()`、
   列表字面量全面放开、Adam 优化器、`--report json` CI 集成、静态字段/lazy-init。
 - **v0.3**：tree-sitter 前端框架 + TypeScript/Java 前端。
 - **v0.4**：双向转换（EnforceScript → Python）、增量/缓存。

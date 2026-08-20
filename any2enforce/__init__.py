@@ -11,6 +11,7 @@ from .diagnostics import DiagnosticSink
 from .frontends.python_frontend import PythonFrontend
 from .ir import Module
 from .sema.analyze import Analyzer
+from .sema.lift_comps import lift_comprehensions
 
 __version__ = "0.1.0"
 
@@ -50,6 +51,7 @@ def transpile(source: str, filename: str = "<string>", config: dict | None = Non
             f"frontend for '{lang}' is not implemented yet (v0.1 ships python only)",
         )
     mod = PythonFrontend(diag).parse(source, filename)
+    lift_comprehensions(mod)
     Analyzer(diag, config).run(mod)
     text = EnforceBackend(config, diag).emit(mod)
     return mod, text, diag

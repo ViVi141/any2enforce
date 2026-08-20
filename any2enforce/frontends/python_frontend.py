@@ -13,11 +13,12 @@ from typing import List, Optional
 from ..diagnostics import DiagnosticSink
 from ..ir import (
     AnnAssignStmt, AssignStmt, AttributeExpr, AugAssignStmt, BinOpExpr,
-    BoolOpExpr, BreakStmt, CallExpr, ClassDef, CompareExpr, ConstExpr,
-    ContinueStmt, DictExpr, ExprStmt, ForStmt, FunctionDef, IfStmt,
-    ImportStmt, JoinedStrExpr, KwArg, ListExpr, MethodDef, Module, NameExpr,
-    Node, Param, PassStmt, RangeForStmt, ReturnStmt, Span, Stmt, SubscriptExpr,
-    TernaryExpr, UnaryOpExpr, UnsupportedExpr, UnsupportedStmt, WhileStmt,
+    BoolOpExpr, BreakStmt, CallExpr, ClassDef, CompClause, CompareExpr,
+    ConstExpr, ContinueStmt, DictCompExpr, DictExpr, Expr, ExprStmt, ForStmt,
+    FunctionDef, IfStmt, ImportStmt, JoinedStrExpr, KwArg, ListCompExpr,
+    ListExpr, MethodDef, Module, NameExpr, Node, Param, PassStmt, RangeForStmt,
+    ReturnStmt, SetCompExpr, Span, Stmt, SubscriptExpr, TernaryExpr,
+    UnaryOpExpr, UnsupportedExpr, UnsupportedStmt, WhileStmt,
 )
 
 _BIN_OPS = {
@@ -42,9 +43,6 @@ _UNSUPPORTED_STMTS = [
 ]
 _UNSUPPORTED_EXPRS = [
     (ast.Lambda, "lambda/closures"),
-    (ast.ListComp, "list comprehension"),
-    (ast.SetComp, "set comprehension"),
-    (ast.DictComp, "dict comprehension"),
     (ast.GeneratorExp, "generator expression"),
     (ast.Starred, "*args unpacking"),
 ]
@@ -566,6 +564,15 @@ class PythonFrontend:
                 span=span,
             )
 
+        if isinstance(node, ast.ListComp):
+            return self._list_comp(node)
+
+        if isinstance(node, ast.DictComp):
+            return self._dict_comp(node)
+
+        if isinstance(node, ast.SetComp):
+            return self._set_comp(node)
+
         if isinstance(node, (ast.Yield, ast.YieldFrom)):
             self.diag.error(
                 "unsupported-yield",
@@ -588,6 +595,82 @@ class PythonFrontend:
 
         self.diag.error("unknown-expr", f"unhandled expression {type(node).__name__}", span)
         return UnsupportedExpr(f"unhandled {type(node).__name__}", span=span)
+
+    def _list_comp(self, node: ast.ListComp) -> Expr:
+        span = self._span(node)
+        clauses = self._comp_clauses(node.generators, span)
+        if clauses is None:
+            return UnsupportedExpr("list comprehension (bad generator)", span=span)
+        return ListCompExpr(self._expr(node.elt), clauses, span=span)
+
+    def _dict_comp(self, node: ast.DictComp) -> Expr:
+        span = self._span(node)
+        clauses = self._comp_clauses(node.generators, span)
+        if clauses is None:
+            return UnsupportedExpr("dict comprehension (bad generator)", span=span)
+        return DictCompExpr(
+            self._expr(node.key), self._expr(node.value), clauses, span=span)
+
+    def _set_comp(self, node: ast.SetComp) -> Expr:
+        span = self._span(node)
+        clauses = self._comp_clauses(node.generators, span)
+        if clauses is None:
+            return UnsupportedExpr("set comprehension (bad generator)", span=span)
+        return SetCompExpr(self._expr(node.elt), clauses, span=span)
+
+    def _comp_clauses(self, generators, span: Span):
+        """Parse comprehension generators into CompClause list.
+
+        Returns None when a generator cannot be represented (tuple unpack /
+        async for) — caller emits UnsupportedExpr.
+        """
+        clauses = []
+        for gen in generators:
+            if getattr(gen, "is_async", False):
+                self.diag.error(
+                    "comp-async",
+                    "async for in comprehensions is not supported",
+                    self._span(gen),
+                )
+                return None
+            if not isinstance(gen.target, ast.Name):
+                self.diag.error(
+                    "comp-unpack",
+                    "tuple/star unpacking in comprehension targets is not supported",
+                    self._span(gen.target),
+                    note="use a single name, e.g. `for x in items`",
+                )
+                return None
+            target = NameExpr(gen.target.id, span=self._span(gen.target))
+            ifs = [self._expr(i) for i in gen.ifs]
+            it = gen.iter
+            if (isinstance(it, ast.Call)
+                    and isinstance(it.func, ast.Name)
+                    and it.func.id == "range"):
+                args = [self._expr(a) for a in it.args]
+                if len(args) == 1:
+                    lo, hi, step = ConstExpr(0, span=span), args[0], None
+                elif len(args) == 2:
+                    lo, hi, step = args[0], args[1], None
+                elif len(args) == 3:
+                    lo, hi, step = args[0], args[1], args[2]
+                else:
+                    self.diag.error(
+                        "range-args",
+                        "range() needs 1..3 arguments",
+                        self._span(it),
+                    )
+                    return None
+                clauses.append(CompClause(
+                    target, ifs=ifs, is_range=True, lo=lo, hi=hi, step=step,
+                    span=self._span(gen),
+                ))
+            else:
+                clauses.append(CompClause(
+                    target, ifs=ifs, iterable=self._expr(it),
+                    span=self._span(gen),
+                ))
+        return clauses
 
     # ------------------------------------------------------------------
     # Helpers

@@ -12,8 +12,6 @@ from any2enforce import transpile
     ("def f():\n    with open('x') as fh:\n        pass\n",
      "unsupported-with-statement"),
     ("f = lambda x: x + 1\n", "unsupported-lambda-closures"),
-    ("def f():\n    return [x * 2 for x in range(5)]\n",
-     "unsupported-list-comprehension"),
     ("def f():\n    def g():\n        return 1\n    return g()\n",
      "unsupported-nested-function"),
     ("def f():\n    yield 1\n", "unsupported-yield"),
@@ -29,6 +27,15 @@ def test_unsupported_constructs_error(source, code):
             [d.code for d in diag.errors]
     # generated output must not be silent: it carries an error or TODO marker
     assert ("[any2enforce" in text) or ("TODO[" in text), text
+
+
+def test_comprehension_in_call_is_lifted():
+    """Nested comps are lifted to temps before the call (no comp-expr)."""
+    src = "def f(xs: list[int]) -> None:\n    print([x for x in xs])\n"
+    _, text, diag = transpile(src, filename="ok.py")
+    assert diag.errors == []
+    assert "Print(_pyLift0);" in text
+    assert "_pyLift0.Insert(x);" in text
 
 
 def test_module_entry_guard_is_reported():

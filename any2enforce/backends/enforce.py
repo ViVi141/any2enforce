@@ -14,12 +14,12 @@ from ..diagnostics import DiagnosticSink
 from ..ir import (
     AUTO, BOOL, FLOAT, INT, STRING, VOID, AnnAssignStmt, ArrayType,
     AssignStmt, AttributeExpr, AugAssignStmt, BoolOpExpr, BinOpExpr,
-    BreakStmt, CallExpr, ClassDef, CompareExpr, ConstExpr, ContinueStmt,
-    DictExpr, ErrorType, Expr, ExprStmt, ForStmt, FunctionDef, IfStmt,
-    ImportStmt, JoinedStrExpr, ListExpr, MapType, MethodDef, Module, NameExpr,
-    PassStmt, RangeForStmt, ReturnStmt, ScalarType, SetType, Span, Stmt,
-    SubscriptExpr, TernaryExpr, Type, UnaryOpExpr, UnsupportedExpr,
-    UnsupportedStmt, WhileStmt,
+    BreakStmt, CallExpr, ClassDef, CompClause, CompareExpr, ConstExpr,
+    ContinueStmt, DictCompExpr, DictExpr, ErrorType, Expr, ExprStmt, ForStmt,
+    FunctionDef, IfStmt, ImportStmt, JoinedStrExpr, ListCompExpr, ListExpr,
+    MapType, MethodDef, Module, NameExpr, PassStmt, RangeForStmt, ReturnStmt,
+    ScalarType, SetCompExpr, SetType, Span, Stmt, SubscriptExpr, TernaryExpr,
+    Type, UnaryOpExpr, UnsupportedExpr, UnsupportedStmt, WhileStmt,
 )
 
 RESERVED = {
@@ -48,6 +48,7 @@ class EnforceBackend:
         self._method_names: set = set()
         self._locals: Dict[str, Type] = {}
         self._scopes: List[set] = []  # EnforceScript uses block scoping (unlike Python)
+        self._comp_tmp = 0
 
     # ==================================================================
     # entry
@@ -257,7 +258,9 @@ class EnforceBackend:
         if isinstance(stmt, AssignStmt):
             self._assign(stmt)
         elif isinstance(stmt, AnnAssignStmt):
-            if isinstance(stmt.target, NameExpr):
+            if isinstance(stmt.value, (ListCompExpr, DictCompExpr, SetCompExpr)):
+                self._comp_assign(stmt.target, stmt.value, declared_type=stmt.type)
+            elif isinstance(stmt.target, NameExpr):
                 t = stmt.type or AUTO
                 self._declare(stmt.target.name)
                 if isinstance(stmt.value, ListExpr):
@@ -283,6 +286,8 @@ class EnforceBackend:
                 self._line("return;")
             elif isinstance(stmt.value, TernaryExpr):
                 self._ternary_return(stmt.value)
+            elif isinstance(stmt.value, (ListCompExpr, DictCompExpr, SetCompExpr)):
+                self._comp_return(stmt.value)
             else:
                 self._line(f"return {self._expr(stmt.value)};")
         elif isinstance(stmt, IfStmt):
@@ -320,6 +325,9 @@ class EnforceBackend:
             return
         if isinstance(stmt.value, TernaryExpr):
             self._ternary_assign(stmt)
+            return
+        if isinstance(stmt.value, (ListCompExpr, DictCompExpr, SetCompExpr)):
+            self._comp_assign(stmt.target, stmt.value)
             return
         target = self._expr(stmt.target)
         value = self._expr(stmt.value)
@@ -408,6 +416,172 @@ class EnforceBackend:
         self._line(f"return {self._expr(t.if_false)};")
         self.indent -= 1
         self._line("}")
+
+    def _comp_assign(self, target: Expr, comp: Expr,
+                     declared_type: Optional[Type] = None) -> None:
+        """Lower list/dict/set comprehension at assignment (like ternary)."""
+        ctype = declared_type if isinstance(
+            declared_type, (ArrayType, MapType, SetType)
+        ) else None
+        if ctype is None:
+            ctype = getattr(comp, "type", None)
+        if not isinstance(ctype, (ArrayType, MapType, SetType)):
+            self.diag.error(
+                "comp-type",
+                "cannot determine comprehension container type; annotate the "
+                "target (e.g. `ys: list[int] = [...]`)",
+                comp.span,
+            )
+            if isinstance(comp, DictCompExpr):
+                ctype = MapType(FLOAT, FLOAT)
+            elif isinstance(comp, SetCompExpr):
+                ctype = SetType(FLOAT)
+            else:
+                ctype = ArrayType(FLOAT)
+        dest = self._declare_empty_container(target, ctype)
+        self._emit_comp_clauses(comp, dest, 0)
+
+    def _comp_return(self, comp: Expr) -> None:
+        ctype = getattr(comp, "type", None)
+        if not isinstance(ctype, (ArrayType, MapType, SetType)):
+            self.diag.error(
+                "comp-type",
+                "cannot determine comprehension return type; annotate the "
+                "function return type",
+                comp.span,
+            )
+            if isinstance(comp, DictCompExpr):
+                ctype = MapType(FLOAT, FLOAT)
+            elif isinstance(comp, SetCompExpr):
+                ctype = SetType(FLOAT)
+            else:
+                ctype = ArrayType(FLOAT)
+        tmp = f"_pyComp{self._comp_tmp}"
+        self._comp_tmp += 1
+        dest = self._declare_empty_container(NameExpr(tmp, span=comp.span), ctype)
+        self._emit_comp_clauses(comp, dest, 0)
+        self._line(f"return {dest};")
+
+    def _declare_empty_container(self, target: Expr, ctype: Type) -> str:
+        """Emit empty array/map/set declaration; return destination name text."""
+        if isinstance(ctype, ArrayType):
+            empty = "{}"
+            typ_s = self._type(ctype)
+        elif isinstance(ctype, MapType):
+            empty = f"new {self._type(ctype)}()"
+            typ_s = self._type(ctype)
+        elif isinstance(ctype, SetType):
+            empty = f"new {self._type(ctype)}()"
+            typ_s = self._type(ctype)
+        else:
+            empty = "{}"
+            typ_s = "auto"
+        if isinstance(target, NameExpr):
+            name = self._var_id(target.name)
+            if self._in_scope(target.name):
+                self._line(f"{name} = {empty};")
+            else:
+                self._declare(target.name)
+                self._line(f"{typ_s} {name} = {empty};")
+            return name
+        name = self._expr(target)
+        self._line(f"{name} = {empty};")
+        return name
+
+    def _emit_comp_clauses(self, comp: Expr, dest: str, idx: int) -> None:
+        clauses = comp.clauses
+        if idx >= len(clauses):
+            self._emit_comp_insert(comp, dest)
+            return
+        clause = clauses[idx]
+        if clause.is_range:
+            self._emit_comp_range_header(clause)
+        else:
+            self._emit_comp_foreach_header(clause)
+        self._line("{")
+        self.indent += 1
+        self._scopes.append({clause.target.name})
+        self._emit_comp_ifs(clause.ifs, comp, dest, idx)
+        self._scopes.pop()
+        self.indent -= 1
+        self._line("}")
+
+    def _emit_comp_ifs(self, ifs: List[Expr], comp: Expr, dest: str,
+                      clause_idx: int) -> None:
+        if not ifs:
+            self._emit_comp_clauses(comp, dest, clause_idx + 1)
+            return
+        self._line(f"if ({self._expr(ifs[0])})")
+        self._line("{")
+        self.indent += 1
+        self._emit_comp_ifs(ifs[1:], comp, dest, clause_idx)
+        self.indent -= 1
+        self._line("}")
+
+    def _emit_comp_insert(self, comp: Expr, dest: str) -> None:
+        if isinstance(comp, ListCompExpr) or isinstance(comp, SetCompExpr):
+            self._line(f"{dest}.Insert({self._expr(comp.elt)});")
+        elif isinstance(comp, DictCompExpr):
+            self._line(
+                f"{dest}[{self._expr(comp.key)}] = {self._expr(comp.value)};")
+        else:
+            self._line(f"// [any2enforce:error] unhandled comprehension")
+
+    def _emit_comp_foreach_header(self, clause: CompClause) -> None:
+        t = clause.elem_type
+        if isinstance(t, ErrorType) or t is None:
+            render = "auto"
+            if t is None:
+                self.diag.error(
+                    "comp-foreach-type",
+                    "missing comprehension foreach element type",
+                    clause.span,
+                )
+        else:
+            render = self._type(t)
+        it = clause.iterable
+        self._line(
+            f"foreach ({render} {self._var_id(clause.target.name)} : "
+            f"{self._expr(it) if it is not None else '/*missing*/'})"
+        )
+
+    def _emit_comp_range_header(self, clause: CompClause) -> None:
+        var = self._var_id(clause.target.name)
+        lo, hi = clause.lo, clause.hi
+        if lo is None or hi is None:
+            self.diag.error(
+                "comp-range", "incomplete range() in comprehension", clause.span)
+            lo = lo or ConstExpr(0)
+            hi = hi or ConstExpr(0)
+        temps: List[str] = []
+        for label, e in (("lo", lo), ("hi", hi)):
+            if not _is_simple(e):
+                tmp = f"_pyRange{len(temps)}"
+                self._line(f"int {tmp} = {self._expr(e)};")
+                temps.append(tmp)
+                if label == "lo":
+                    lo = NameExpr(tmp)
+                else:
+                    hi = NameExpr(tmp)
+        step = clause.step
+        if step is None or (isinstance(step, ConstExpr) and step.value == 1):
+            cond = f"{var} < {self._expr(hi)}"
+            inc = f"{var}++"
+        elif isinstance(step, ConstExpr) and isinstance(step.value, int) and step.value > 1:
+            cond = f"{var} < {self._expr(hi)}"
+            inc = f"{var} += {step.value}"
+        elif isinstance(step, ConstExpr) and isinstance(step.value, int) and step.value < 0:
+            cond = f"{var} > {self._expr(hi)}"
+            inc = f"{var} -= {-step.value}"
+        else:
+            self.diag.error(
+                "range-step",
+                "range() with non-constant step is not supported in v0.1",
+                step.span if step else clause.span,
+            )
+            cond = f"{var} < {self._expr(hi)}"
+            inc = f"{var}++"
+        self._line(f"for (int {var} = {self._expr(lo)}; {cond}; {inc})")
 
     def _aug_assign(self, stmt: AugAssignStmt) -> None:
         t = self._expr(stmt.target)
@@ -575,6 +749,16 @@ class EnforceBackend:
                 e.span,
             )
             return "0"
+        if isinstance(e, (ListCompExpr, DictCompExpr, SetCompExpr)):
+            kind = "list" if isinstance(e, ListCompExpr) else (
+                "dict" if isinstance(e, DictCompExpr) else "set")
+            self.diag.error(
+                "comp-expr",
+                f"{kind} comprehension escaped lift pass; this is an internal "
+                "error — please report",
+                e.span,
+            )
+            return "/* [any2enforce:error] comprehension */ 0"
         if isinstance(e, UnsupportedExpr):
             return f"/* [any2enforce:error] {e.reason} */ 0"
         return "/* [any2enforce:error] unhandled expression */ 0"

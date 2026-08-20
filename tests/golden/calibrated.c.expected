@@ -58,3 +58,26 @@ float wrap(float deg)
 {
     return Math.Mod(deg, 360.0);
 }
+
+array<int> doubles(array<int> values)
+{
+    array<int> _pyComp0 = {};
+    foreach (int v : values)
+    {
+        if (v > 0)
+        {
+            _pyComp0.Insert(v * 2);
+        }
+    }
+    return _pyComp0;
+}
+
+map<int, int> index_map(array<int> values)
+{
+    map<int, int> result = new map<int, int>();
+    foreach (int v : values)
+    {
+        result[v] = v * v;
+    }
+    return result;
+}

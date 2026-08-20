@@ -215,6 +215,48 @@ class TernaryExpr(Expr):
 
 
 @dataclass
+class CompClause(Node):
+    """One `for` clause in a comprehension, optionally with `if` filters.
+
+    Either ``is_range`` (counter loop from ``range(...)``) or ``iterable``
+    (foreach over an array/set). ``elem_type`` is filled by sema.
+    """
+    target: NameExpr
+    ifs: List[Expr] = field(default_factory=list)
+    is_range: bool = False
+    iterable: Optional[Expr] = None
+    lo: Optional[Expr] = None
+    hi: Optional[Expr] = None
+    step: Optional[Expr] = None
+    elem_type: Optional[Type] = None
+
+
+@dataclass
+class ListCompExpr(Expr):
+    """``[elt for ... if ...]`` — expanded by the backend at assign/return."""
+    elt: Expr
+    clauses: List[CompClause]
+    type: Optional[Type] = None
+
+
+@dataclass
+class DictCompExpr(Expr):
+    """``{key: value for ... if ...}`` — expanded at assign/return."""
+    key: Expr
+    value: Expr
+    clauses: List[CompClause]
+    type: Optional[Type] = None
+
+
+@dataclass
+class SetCompExpr(Expr):
+    """``{elt for ... if ...}`` — expanded at assign/return."""
+    elt: Expr
+    clauses: List[CompClause]
+    type: Optional[Type] = None
+
+
+@dataclass
 class UnsupportedExpr(Expr):
     """Rendered as a marked 0 placeholder; always paired with an error diagnostic."""
     reason: str

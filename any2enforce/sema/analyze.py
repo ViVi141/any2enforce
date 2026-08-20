@@ -16,10 +16,11 @@ from ..diagnostics import DiagnosticSink
 from ..ir import (
     AUTO, BOOL, FLOAT, INT, STRING, VOID, AnnAssignStmt, ArrayType,
     AssignStmt, AttributeExpr, AugAssignStmt, BoolOpExpr, BinOpExpr, CallExpr,
-    ClassDef, CompareExpr, ConstExpr, DictExpr, ErrorType, Expr, ExprStmt,
-    Field, ForStmt, FunctionDef, IfStmt, ImportStmt, JoinedStrExpr, ListExpr,
-    MapType, MethodDef, Module, NameExpr, Param, RangeForStmt, ReturnStmt,
-    SetType, Stmt, SubscriptExpr, TernaryExpr, Type, UnaryOpExpr, WhileStmt,
+    ClassDef, CompareExpr, ConstExpr, DictCompExpr, DictExpr, ErrorType, Expr,
+    ExprStmt, Field, ForStmt, FunctionDef, IfStmt, ImportStmt, JoinedStrExpr,
+    ListCompExpr, ListExpr, MapType, MethodDef, Module, NameExpr, Param,
+    RangeForStmt, ReturnStmt, SetCompExpr, SetType, Stmt, SubscriptExpr,
+    TernaryExpr, Type, UnaryOpExpr, WhileStmt,
 )
 from .types import parse_type_annotation
 
@@ -209,6 +210,7 @@ class Analyzer:
                 stmt.type = parse_type_annotation(stmt.type_ann) if stmt.type_ann else AUTO
                 env[stmt.target.name] = stmt.type
                 if stmt.value:
+                    self._hint_comp_type(stmt.value, stmt.type)
                     self._analyze_expr(stmt.value, env)
             elif isinstance(stmt, AssignStmt) and isinstance(stmt.target, NameExpr):
                 self._analyze_expr(stmt.value, env)
@@ -282,6 +284,16 @@ class Analyzer:
                         env[name] = t
         return env
 
+    @staticmethod
+    def _hint_comp_type(value: Expr, declared: Type) -> None:
+        """Prefer left-hand annotation over elt inference for comprehensions."""
+        if isinstance(value, ListCompExpr) and isinstance(declared, ArrayType):
+            value.type = declared
+        elif isinstance(value, DictCompExpr) and isinstance(declared, MapType):
+            value.type = declared
+        elif isinstance(value, SetCompExpr) and isinstance(declared, SetType):
+            value.type = declared
+
     # ------------------------------------------------------------------
     def _analyze_expr(self, e: Expr, env: Dict[str, Type]) -> None:
         # attach resolved types to nodes the backend needs (literals, calls)
@@ -351,6 +363,80 @@ class Analyzer:
             self._analyze_expr(e.cond, env)
             self._analyze_expr(e.if_true, env)
             self._analyze_expr(e.if_false, env)
+        elif isinstance(e, (ListCompExpr, DictCompExpr, SetCompExpr)):
+            self._analyze_comprehension(e, env)
+
+    def _analyze_comprehension(self, e: Expr, env: Dict[str, Type]) -> None:
+        local = dict(env)
+        for clause in e.clauses:
+            if clause.is_range:
+                if clause.lo is not None:
+                    self._analyze_expr(clause.lo, local)
+                if clause.hi is not None:
+                    self._analyze_expr(clause.hi, local)
+                if clause.step is not None:
+                    self._analyze_expr(clause.step, local)
+                clause.elem_type = INT
+                local[clause.target.name] = INT
+            else:
+                if clause.iterable is not None:
+                    self._analyze_expr(clause.iterable, local)
+                it = self._infer(clause.iterable, local) if clause.iterable else None
+                if isinstance(it, (ArrayType, SetType)):
+                    clause.elem_type = it.elem
+                else:
+                    self.diag.error(
+                        "comp-foreach-type",
+                        "cannot determine element type for comprehension iterator",
+                        clause.span or e.span,
+                        note="annotate the iterable variable or use range()",
+                    )
+                    clause.elem_type = ErrorType(fallback="auto")
+                local[clause.target.name] = clause.elem_type
+            for iff in clause.ifs:
+                self._analyze_expr(iff, local)
+        if isinstance(e, ListCompExpr):
+            self._analyze_expr(e.elt, local)
+            if e.type is None:
+                elt_t = self._infer(e.elt, local)
+                if elt_t is None:
+                    self.diag.error(
+                        "comp-elt-type",
+                        "cannot infer list comprehension element type; "
+                        "annotate the target, e.g. `ys: list[int] = [...]`",
+                        e.span,
+                    )
+                    elt_t = ErrorType(fallback="float")
+                e.type = ArrayType(elt_t)
+        elif isinstance(e, DictCompExpr):
+            self._analyze_expr(e.key, local)
+            self._analyze_expr(e.value, local)
+            if e.type is None:
+                kt = self._infer(e.key, local)
+                vt = self._infer(e.value, local)
+                if kt is None or vt is None:
+                    self.diag.error(
+                        "comp-dict-type",
+                        "cannot infer dict comprehension key/value types; "
+                        "annotate the target, e.g. `d: dict[str, int] = {...}`",
+                        e.span,
+                    )
+                    kt = kt or ErrorType(fallback="float")
+                    vt = vt or ErrorType(fallback="float")
+                e.type = MapType(kt, vt)
+        elif isinstance(e, SetCompExpr):
+            self._analyze_expr(e.elt, local)
+            if e.type is None:
+                elt_t = self._infer(e.elt, local)
+                if elt_t is None:
+                    self.diag.error(
+                        "comp-elt-type",
+                        "cannot infer set comprehension element type; "
+                        "annotate the target, e.g. `s: set[int] = {...}`",
+                        e.span,
+                    )
+                    elt_t = ErrorType(fallback="float")
+                e.type = SetType(elt_t)
 
     # ------------------------------------------------------------------
     # inference
@@ -417,6 +503,12 @@ class Analyzer:
             return STRING
         if isinstance(e, TernaryExpr):
             return self._infer(e.if_true, env)
+        if isinstance(e, ListCompExpr):
+            return e.type
+        if isinstance(e, DictCompExpr):
+            return e.type
+        if isinstance(e, SetCompExpr):
+            return e.type
         return None
 
 

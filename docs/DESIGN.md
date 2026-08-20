@@ -154,6 +154,7 @@ EnforceScript 是 Bohemia Interactive 在 Arma Reforger（Enfusion 引擎）中�
 | `abs(x)` | `Math.AbsInt/AbsFloat` | ❌ 无 `Math.Abs`（实测） |
 | `[...]` 字面量 | `array<T> x = { ... };` | 实测初始化式语法；仅赋值场景，表达式内报错 |
 | `{...}` dict 字面量 | `map<K,V> x = new map<K,V>();` + `x[k] = v;` | 实测 `new map<...>()` + `[]` 写 |
+| `[...]` / `{...}` / `{k:v}` 推导式 | **赋值/return 展开**；嵌套表达式自动提升 `_pyLiftN` | foreach/for + Insert / `m[k]=v` |
 | `lambda` / 闭包 / 生成器 | ✗ | v0.1 error；后续用回调/`ScriptCaller`（§7） |
 
 ### 4.4 字符串转义
@@ -270,11 +271,11 @@ class Player(Base):
 | 多继承 | error | 组合优先 |
 | 动态属性/`setattr`/`__getattr__` | error | 显式字段 |
 | `global`/`nonlocal` | error | 模块级状态 → `static` 字段 |
-| 列表/字典/集合推导式 | error（v0.1）→ v0.2 自动展开 | `for` + `Insert`，含 `if` 过滤（v0.2） |
+| 列表/字典/集合推导式 | ✔ 赋值/return 自动展开；嵌套表达式 → 临时变量提升 | 嵌套 for + if 过滤；`range` → 计数 for |
 | 内置函数超出映射表 | warning | `// TODO[builtin:<name>]` |
 | 模块级可执行代码（非函数/类） | warning | 包进 `Init` 函数（v0.2） |
 
-> 原则：**推导式是唯一被"自动展开"的特性**，其余一律报错，保证"转换成功 = 语义可信"。
+> 原则：**推导式是唯一被"自动展开"的特性**（赋值/return；嵌套处先提升为临时变量），其余一律报错，保证"转换成功 = 语义可信"。
 
 ---
 
@@ -356,7 +357,8 @@ frontends/
   语料校准（6568 个 `.c`）+ 真机验证（Workbench 编译/运行）全部定案。
   ML 展示（前向/训练器/游戏内现场学习）与实体接入已拆分为独立仓库
   `reforger-ml-lab`（含 `training_lab`、`training_lab_glue.c`、`entity_patterns.md`）。
-- **v0.2**：推导式展开、模块级初始化 → `Init`、`@property`、回调/`ScriptInvoker`（已定案）、
+- ✔ **v0.2（部分）**：list/dict/set 推导式展开（赋值/return）。
+- **v0.2 其余**：模块级初始化 → `Init`、`@property`、回调/`ScriptInvoker`（已定案）、
   列表字面量全面放开、静态字段/lazy-init、Adam 优化器、`--report json` CI 集成。
 - **v0.3**：tree-sitter 前端框架 + TypeScript/Java 前端；接口降级映射。
 - **v0.4**：双向（EnforceScript → Python）便于测试回环；增量/缓存（只重转变更文件）。

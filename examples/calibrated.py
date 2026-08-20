@@ -38,3 +38,12 @@ def not_member(values: list[int], probe: int) -> bool:
 
 def wrap(deg: float) -> float:
     return deg % 360.0
+
+
+def doubles(values: list[int]) -> list[int]:
+    return [v * 2 for v in values if v > 0]
+
+
+def index_map(values: list[int]) -> dict[int, int]:
+    result: dict[int, int] = {v: v * v for v in values}
+    return result
