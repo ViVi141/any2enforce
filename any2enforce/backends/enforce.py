@@ -49,6 +49,14 @@ class EnforceBackend:
         self._locals: Dict[str, Type] = {}
         self._scopes: List[set] = []  # EnforceScript uses block scoping (unlike Python)
         self._comp_tmp = 0
+        # Stage B (bundle) cross-module symbol state; set via set_bundle_tables.
+        self._bundle_tables = None       # BundleSymbolTables | None
+        self._module_qn = ""             # qualified name of module being emitted
+
+    def set_bundle_tables(self, tables, module_qn: str) -> None:
+        """Give the backend the cross-module symbol tables for a bundle."""
+        self._bundle_tables = tables
+        self._module_qn = module_qn
 
     # ==================================================================
     # entry
@@ -866,8 +874,22 @@ class EnforceBackend:
                     e.span,
                 )
                 return "0"
+            # Stage B: bare call to a function imported via `from x import f`
+            # -> f(x) rewires to {target_prefix}{f}(x) (the true global name).
+            sym = self._imported_symbol(name) if self._bundle_tables else None
+            if sym is not None and sym[3] == "function":
+                target_prefix, raw = sym[1], sym[2]
+                fn = f"{target_prefix}{self._fn_id(raw)}"
+                return f"{fn}({', '.join(args)})"
             return f"{self._global_fn_id(name)}({', '.join(args)})"
         if isinstance(e.func, AttributeExpr):
+            # Stage B: module-alias call, e.g. vecmath.magnitude(v), where
+            # `vecmath` is an imported module -> lib_vecmath_magnitude(v).
+            alias_target = self._module_alias_target(e.func)
+            if alias_target is not None:
+                target_prefix, raw_name = alias_target
+                fn = f"{target_prefix}{self._fn_id(raw_name)}"
+                return f"{fn}({', '.join(args)})"
             if _is_super_expr(e.func.value):
                 # super().method(...) -> super.Method(...) (verified: 1357 files)
                 return f"super.{self._method_id(e.func.attr)}({', '.join(args)})"
@@ -883,6 +905,30 @@ class EnforceBackend:
             meth = self._method_id(e.func.attr)
             return f"{obj}.{meth}({', '.join(args)})"
         return f"/* [any2enforce:error] unsupported callee */ 0"
+
+    def _imported_symbol(self, name: str):
+        """Look up an imported-symbol binding for *name* in the current module."""
+        if not self._bundle_tables:
+            return None
+        return self._bundle_tables.symbol_for(self._module_qn, name)
+
+    def _module_alias_target(self, attr: AttributeExpr):
+        """If ``attr`` is ``modulealias.fn``, return ``(target_prefix, fn_raw)``.
+
+        Handles a single dotted level today (``vecmath.magnitude``). Deeper
+        chains (``pkg.sub.fn``) are a known Stage-B limit and left to the
+        fallback path.
+        """
+        if self._bundle_tables is None:
+            return None
+        if not isinstance(attr.value, NameExpr):
+            return None
+        alias = attr.value.name
+        binding = self._bundle_tables.alias_for(self._module_qn, alias)
+        if binding is None:
+            return None
+        target_qn, target_prefix = binding
+        return (target_prefix, attr.attr)
 
     def _str_call(self, e: CallExpr, args: List[str]) -> str:
         """str(x) -> x (string) / x.ToString() (int/float) / string.ToString(x)."""

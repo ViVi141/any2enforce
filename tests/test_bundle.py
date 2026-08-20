@@ -163,3 +163,53 @@ def test_resolver_sibling_import():
     assert len(modules) == 2
     names = {m.name for m in modules}
     assert names == {"main_import", "util"}
+
+
+# ======================================================================
+# Stage B: cross-module symbol rewiring
+# ======================================================================
+
+
+def test_stageB_module_alias_call_rewritten():
+    """from lib import vecmath; vecmath.magnitude(v) -> libx_vecmath_magnitude(v)."""
+    entry = str(FIXTURES / "main_cross.py")
+    modules, text, diag = transpile_bundle(entry)
+    assert diag.errors == [], [d.code for d in diag.errors]
+    # dependency is pulled in
+    assert "libx.vecmath" in {m.name for m in modules}
+    # module-alias attribute call rewired to prefixed global fn
+    assert "libx_vecmath_magnitude(v)" in text
+    assert "libx_vecmath_dot(a, b)" in text
+    # no leftover bare `vecmath.magnitude` runtime call
+    assert "vecmath.magnitude(" not in text
+    assert "vecmath.dot(" not in text
+
+
+def test_stageB_reexport_follows_init():
+    """from pkg2 import helper (re-exported in pkg2/__init__.py) -> pkg2_core2_helper."""
+    entry = str(FIXTURES / "main_reexport.py")
+    modules, text, diag = transpile_bundle(entry)
+    assert diag.errors == [], [d.code for d in diag.errors]
+    assert "pkg2.core2" in {m.name for m in modules}
+    # bare `helper(x)` rewires through the package re-export
+    assert "return pkg2_core2_helper(x);" in text
+    assert "main_reexport_helper(" not in text
+
+
+def test_stageB_package_submodule_call_rewritten():
+    """from pkg import core; core.compute(a,b) -> pkg_core_compute(a,b)."""
+    entry = str(FIXTURES / "main_pkg.py")
+    modules, text, diag = transpile_bundle(entry)
+    assert diag.errors == [], [d.code for d in diag.errors]
+    # `core` is imported as a module alias of pkg.core; `.compute` rewires
+    assert "return pkg_core_compute(a, b);" in text
+    assert "core.compute(" not in text
+
+
+def test_stageB_builtin_import_not_unresolved():
+    """import math is a builtin: no bundle-unresolved-import error."""
+    entry = str(FIXTURES / "main_builtin.py")
+    modules, text, diag = transpile_bundle(entry)
+    assert not any(d.code == "bundle-unresolved-import" for d in diag.errors), \
+        [d.code for d in diag.errors]
+    assert modules  # entry still present

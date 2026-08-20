@@ -91,7 +91,8 @@
 > 产物；`BundleVerify.c` = 自检）；受试产物源码 `examples/bundledemo/`（依赖库 `lib/vecmath.py`
 > + 入口 `main.py`，`from lib import vecmath`）。
 
-**ValidateScripts：0 错误。** 运行输出 11/11 `[BUNDLE] PASS`：
+**ValidateScripts：0 错误。** 运行输出 11/11 `[BUNDLE] PASS`（Stage A）；Stage B 跨模块
+`xmodule.*` 另 4/4 PASS，合计 **15/15**（2026-08 真实 Workbench 实测确认）：
 
 | tag | 计算 | 期望 | 结果 |
 |---|---|---|---|
@@ -106,8 +107,19 @@
 | `weights.has3keys` | `map.Contains` 三键 | 1 | ✅ |
 
 **定案**：bundle 产物的数组/规约/map `Contains`/`[]`/回退/`Math.AbsFloat` 等映射在真实运行时正确。
-**边界（如实）**：跨模块符号重连（Stage B）未实现 —— 入口函数不得在运行时调用依赖模块函数；
-自检驱动依赖库自身独立全局函数（`lib_vecmath_*`）。详见 `docs/DESIGN.md` §14。
+
+**Stage B（跨模块符号重连）已定案**：入口函数内部运行时调用依赖模块函数
+（`main_describe_magnitude`→`lib_vecmath_magnitude`、`main_total_dot`→`lib_vecmath_dot`、
+`main_pick_weight`→`lib_vecmath_weighted_sum`）编译通过、结果正确。
+
+| xmodule tag | 计算 | 期望 | 结果 |
+|---|---|---|---|
+| `describe_magnitude[3,4]` | 跨模块 string 返回 | `mag=25` | ✅ |
+| `total_dot` | 跨模块 dot | 60 | ✅ |
+| `pick_weight.hit` | 跨模块 map 命中 | 1.0 | ✅ |
+| `pick_weight.fallback` | 跨模块 回退 | 7.0 | ✅ |
+
+见 `docs/DESIGN.md` §14。
 
 ## 自动化校验（规划）
 

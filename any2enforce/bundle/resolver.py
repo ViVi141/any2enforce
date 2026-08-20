@@ -15,6 +15,27 @@ from ..diagnostics import DiagnosticSink
 from ..ir import ImportStmt, Module
 
 
+# Standard-library / builtin modules that have no EnforceScript counterpart and
+# are intentionally NOT resolved in a bundle. They are echoed as comments (the
+# module-level import is dropped) rather than raising an unresolved-import error,
+# because the user is expected to have provided alternatives (or none of these
+# are portable to EnforceScript anyway).
+BUILTIN_MODULES = {
+    "math", "random", "json", "os", "sys", "re", "time", "datetime",
+    "itertools", "functools", "typing", "enum", "dataclasses", "pathlib",
+    "collections", "struct", "uuid", "array", "cmath", "decimal", "fractions",
+    "statistics", "bisect", "heapq", "operator", "copy", "numbers", "math_note",
+}
+
+
+def is_builtin_module(module_name: str) -> bool:
+    """True if *module_name* (or its top-level package) is a stdlib/builtin."""
+    if not module_name:
+        return False
+    top = module_name.split(".")[0]
+    return top in BUILTIN_MODULES
+
+
 def qn_to_ns_prefix(qualified_name: str) -> str:
     """Convert a qualified module name into a namespace prefix.
 
@@ -103,7 +124,12 @@ class Resolver:
             self._modules[qn] = mod
 
             for imp in mod.imports:
-                results = self._resolve_import_multi(imp, qn, roots)
+                if is_builtin_module(imp.module):
+                    # stdlib/builtin: not part of the bundle; drop silently
+                    # (the backend echoes it as a `// import` comment).
+                    continue
+                results = self._resolve_import_multi(
+                    imp, qn, roots, is_pkg=(file_path.name == "__init__.py"))
                 if not results:
                     self.diag.error(
                         "bundle-unresolved-import",
@@ -192,16 +218,21 @@ class Resolver:
         imp: ImportStmt,
         importing_qn: str,
         roots: List[pathlib.Path],
+        is_pkg: bool = False,
     ) -> List[Tuple[str, pathlib.Path]]:
         """Resolve one import statement to zero or more (qn, path) pairs.
 
         Most imports produce a single result, but ``from pkg import sub``
         may return both the package (``pkg/__init__.py``) and the submodule
         (``pkg/sub.py``) when both exist.
+
+        *is_pkg* — True when *importing_qn* is a package ``__init__`` module
+        (affects relative-import resolution: ``from .x`` in ``pkg/__init__.py``
+        resolves to ``pkg.x``, not ``<pkg-parent>.x``).
         """
         # --- Relative imports ---
         if imp.level > 0:
-            result = self._resolve_relative(imp, importing_qn, roots)
+            result = self._resolve_relative(imp, importing_qn, roots, is_pkg)
             return [result] if result else []
 
         mod_name = imp.module
@@ -249,25 +280,30 @@ class Resolver:
         imp: ImportStmt,
         importing_qn: str,
         roots: List[pathlib.Path],
+        is_pkg: bool,
     ) -> Optional[Tuple[str, pathlib.Path]]:
         level = imp.level
         importing_parts = importing_qn.split(".")
 
-        if level > len(importing_parts):
-            return None  # beyond top-level
+        if is_pkg:
+            # ``pkg/__init__.py``: the current package is *importing_qn* itself.
+            # ``from .x`` (level 1) resolves against this package. level 2 or
+            # more steps up from the package's parent.
+            # Effective: package for level-1 = importing_qn.
+            parent = importing_qn if level == 1 else \
+                ".".join(importing_parts[: -(level - 1)]) if level > 1 else importing_qn
+        else:
+            parent = ".".join(importing_parts[:-level]) if level > 0 else ""
 
         mod_name = imp.module.lstrip(".")  # strip leading dots
 
         if mod_name:
-            # ``from ..mod import x`` -> parent.mod
-            parent = ".".join(importing_parts[:-level]) if level > 0 else ""
             qn = f"{parent}.{mod_name}" if parent else mod_name
             return self._find_module(qn, roots)
 
         # ``from . import x`` where x is in imp.names
         if not imp.names:
             return None
-        parent = ".".join(importing_parts[:-level]) if level > 0 else ""
         qn = f"{parent}.{imp.names[0]}" if parent else imp.names[0]
         return self._find_module(qn, roots)
 

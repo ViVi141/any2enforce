@@ -122,16 +122,25 @@ def transpile_bundle(entry_py: str,
         return [], "", diag
 
     # 2. Analyse + emit each module, collect pieces
+    #    Build cross-module symbol tables (Stage B) so call sites can rewrite
+    #    module-alias / from-import references to the true global names.
+    from .sema.bundle_symbols import build_bundle_symbol_tables
+
+    tables = build_bundle_symbol_tables(modules, diag)
+
     pieces: list[str] = []
     source_list: list[str] = []
 
     for mod in modules:
         source_list.append(mod.name)
-        Analyzer(diag, config).run(mod)
+        # Names `from x import f` pulls into this module's scope (Stage B).
+        known = _imported_fn_names(tables, mod.name)
+        Analyzer(diag, config, known_imports=known).run(mod)
 
-        # Let the backend know about the module's namespace prefix.
-        # Create a per-module backend that applies ns_prefix.
+        # Let the backend know about the module's namespace prefix and the
+        # cross-module symbol tables (for call-site rewiring).
         be = EnforceBackend(config, diag)
+        be.set_bundle_tables(tables, mod.name)
         piece = be.emit(mod)
         pieces.append(piece)
 
@@ -139,6 +148,10 @@ def transpile_bundle(entry_py: str,
     header = _bundle_header(source_list)
     merged = header + "\n".join(pieces)
     return modules, merged, diag
+
+
+def _imported_fn_names(tables, module_qn: str) -> set:
+    return tables.function_imports(module_qn)
 
 
 def _bundle_header(source_modules: list[str]) -> str:

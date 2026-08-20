@@ -363,8 +363,10 @@ frontends/
   `__init__.py` 包规则）、每模块 `ns_prefix` 消歧、`transpile_bundle()` 单 `.c` 发射、
   CLI `--bundle ENTRY --include DIR`、`examples/bundledemo/` 示例、
   真实 Workbench 验证全 PASS（`New Enfusion Project/scripts/Game/BundleVerify/`，11/11）。
-  **边界**：Stage B（跨模块符号重连，`main` 里运行时调用依赖的 `vecmath.xxx` → 目前发射
-  未定义的裸引用）未实现，详见下方 §14。
+- ✔ **v0.2（bundle 阶段 B）**：跨模块符号重连（`sema/bundle_symbols.py` + 后端 `_call`
+  改写）—— `vecmath.magnitude(v)`→`lib_vecmath_magnitude(v)`、from-import 裸名、
+  包子模块、`__init__.py` 再导出、内置模块抑制 unresolved、类名碰撞告警；
+  BundleVerify 扩展 `xmodule.*` 跨模块用例，15/15 PASS。详见 §14。
 - ✔ **v0.2（numpy 轨道 — 设计 + 原型）**：`docs/NUMPY.md`（np 子集内置 EnforceScript
   数值层设计）+ `verify/numpy_probe.py`（float32 模拟器 vs 真实 numpy 2.4.4 数值对拍 12/12
   PASS，量化 float32/float64 漂移）。numpy mapper（`frontends/numpy_mapper.py`）属后续阶段，
@@ -406,14 +408,22 @@ frontends/
 - 真实 Workbench 验证：`New Enfusion Project/scripts/Game/BundleVerify/`，
   ValidateScripts 0 错误、运行 11/11 `[BUNDLE] PASS`。
 
-**Stage B（未实现，关键边界）**：**跨模块符号重连**。当前产物里入口函数若在运行时
-调用依赖模块的函数（如 `vecmath.magnitude(v)`），会发射**未定义的 `vecmath.magnitude`**
-裸引用 → EnforceScript 编译失败。因此自检用例目前直接驱动依赖库自身的独立全局函数
-（`lib_vecmath_*`），而非让入口内部调用跨模块函数。Stage B 需：
-1. 调用改写：`vecmath.magnitude(x)` → `lib_vecmath_magnitude(x)`；
-2. `from x import y` 展开：裸名 `helper(x)` → 前缀名；
-3. 跨模块类/`ref` 泛型/继承的改名同步；类名冲突检测；
-4. `__init__.py` 再导出；内置模块 vs 用户模块的导入区分（内置不报 unresolved）。
+**Stage B（已实现 — 跨模块符号重连）**：入口函数现在能在运行时真正调用依赖模块的
+函数，产物里不会再有未定义的 `vecmath.magnitude` 裸引用。
+- `any2enforce/sema/bundle_symbols.py`：构建跨模块符号表（`module_aliases` +
+  `imported_symbols`），把「本模块局部名 → 目标模块前缀全局名」关联起来；
+- 后端 `_call`/`_call`模块别名分支：`vecmath.magnitude(v)` → `lib_vecmath_magnitude(v)`、
+  `from x import f` 裸名 `f(...)` → `{目标前缀}f(...)`；
+- 包子模块 `from pkg import core` + `core.compute(...)` → `pkg_core_compute(...)`；
+- `__init__.py` 再导出（`from .core import helper` 后 `from pkg import helper`）
+  沿再导出索引追到最终源模块；
+- 内置/stdlib 模块（`math`/`os`...）不再报 `bundle-unresolved-import`；
+- 类名跨模块碰撞 → `bundle-class-collision` 告警；
+- 真实 Workbench 验证扩展：`BundleVerify.c` 新增 `xmodule.*` 跨模块用例
+  （`main_describe_magnitude`/`main_total_dot`/`main_pick_weight`），ValidateScripts
+  0 错误、真机运行 11+4 = **15/15 `[BUNDLE] PASS`（2026-08 实测确认）**。
+- 已知限制：深层点号链（`pkg.sub.fn`）暂只落模块别名第一层；跨模块类名的 `ref`/继承
+  引用仍用裸类名（依赖碰撞告警而非自动改名）。
 
 **Stage C（未实现）**：按调用边 tree-shaking（保守保留类全部方法）、库对 `os/sys/I-O`
 等引擎外假定的三档分流（可映射/需实现接口/报错）、库入口 `Init`/`ScriptComponent` 壳。

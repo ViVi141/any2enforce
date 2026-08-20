@@ -42,9 +42,13 @@ _RETURN_OF_BUILTIN = {
 
 
 class Analyzer:
-    def __init__(self, diagnostics: DiagnosticSink, config: dict) -> None:
+    def __init__(self, diagnostics: DiagnosticSink, config: dict,
+                 known_imports: Optional[set] = None) -> None:
         self.diag = diagnostics
         self.config = config
+        # Names brought into scope by cross-module `from x import f` (Stage B);
+        # suppresses the spurious `unknown-call` warning for imported symbols.
+        self.known_imports = known_imports or set()
         self.fn_returns: Dict[str, Type] = {}
         self.class_names: set = set()
 
@@ -315,7 +319,8 @@ class Analyzer:
             if isinstance(e.func, NameExpr) and e.func.name not in env \
                     and e.func.name not in BUILTIN_CALLS \
                     and e.func.name not in self.fn_returns \
-                    and e.func.name not in self.class_names:
+                    and e.func.name not in self.class_names \
+                    and e.func.name not in self.known_imports:
                 self.diag.warning(
                     "unknown-call",
                     f"unknown function or builtin '{e.func.name}'",

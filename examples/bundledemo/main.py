@@ -1,23 +1,37 @@
 """Bundle demo entry.
 
-Imports the bundled dependency library `lib.vecmath` and exercises it.
+Imports the bundled dependency library `lib.vecmath` and exercises it,
+including real cross-module runtime calls (Stage B: module-alias rewiring).
 
-Goal for the real-Workbench verify case: the ENTIRE bundle output
-(dependency library + entry) must be compilable and runnable with 0 errors.
-
-v0.1/Stage-A boundary: cross-module call rewiring is NOT implemented yet, so
-entry functions here must NOT call `vecmath.xxx` at runtime (that would emit a
-bare `vecmath.magnitude(...)` reference the EnforceScript compiler rejects as
-undefined). Functions here therefore use only the entry's own scope / the
-dependency is pulled into the closure purely by `import`; the Workbench test
-drives the dependency library's own self-contained top-level functions
-(`lib_vecmath_*`) directly.
+Two import styles are exercised to cover Stage B:
+  - ``from lib import vecmath``  -> ``vecmath.<fn>(...)`` rewires to the
+    dependency's prefixed global function (e.g. ``lib_vecmath_magnitude``).
+  - ``from lib.vecmath import weighted_sum`` -> bare ``weighted_sum(...)``
+    rewires to ``lib_vecmath_weighted_sum``.
 """
 
 from lib import vecmath
+from lib.vecmath import weighted_sum
 
 
 def make_weights() -> dict[str, float]:
     cfg = {"border": 0.5, "center": 1.0}
     cfg["corner"] = 0.25
     return cfg
+
+
+def describe_magnitude(v: list[float]) -> str:
+    # cross-module call via module alias -> lib_vecmath_magnitude(v)
+    mag = vecmath.magnitude(v)
+    return f"mag={mag}"
+
+
+def total_dot(a: list[float], b: list[float]) -> float:
+    # cross-module call via module alias -> lib_vecmath_dot(a, b)
+    return vecmath.dot(a, b)
+
+
+def pick_weight(key: str, fallback: float) -> float:
+    # bare imported function -> lib_vecmath_weighted_sum
+    w = make_weights()
+    return weighted_sum(w, key, fallback)
